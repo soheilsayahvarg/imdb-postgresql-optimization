@@ -1,0 +1,15 @@
+# Python 3.13 on Windows. psycopg2-binary ships cp313 wheels from 2.9.10 onward,
+# so no PostgreSQL client toolchain is needed on the host.
+psycopg2-binary>=2.9.10
+
+# Reads resources/.env so the scripts and docker compose share one credential source.
+python-dotenv>=1.0.1
+
+# Streaming HTTP downloads with resume support (Range requests).
+requests>=2.32.0
+
+# Progress bars for a load that runs for hours.
+tqdm>=4.66.0
+
+# Note: gzip, csv and json are standard library. The producer never decompresses
+# a TSV to disk, so no external decompression tool is required either.

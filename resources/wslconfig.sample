@@ -1,0 +1,25 @@
+# Copy the contents below to C:\Users\victus\.wslconfig
+# Then run `wsl --shutdown` in PowerShell and restart Docker Desktop.
+#
+# Without this file WSL2 claims up to 50% of host RAM (about 7.8 GB here) and,
+# worse, never returns freed memory to Windows until shutdown.
+
+[wsl2]
+# Hard cap for the WSL2 VM that hosts the Docker engine.
+# Host has 15.6 GB; leave ~5.6 GB for Windows and the host Python processes.
+memory=10GB
+
+# Host has 8 physical / 12 logical cores.
+processors=8
+
+# Swap inside the VM. Keep some, so a runaway index build degrades instead of OOM-killing.
+swap=4GB
+
+# Return freed page-cache pages to Windows instead of hoarding them.
+# Requires a recent WSL build; harmless if unsupported.
+autoMemoryReclaim=gradual
+
+# The vhdx grows on demand up to this size. It lives on C:, which has ~53 GB free,
+# so this is an upper bound, not a reservation.
+[experimental]
+sparseVhd=true

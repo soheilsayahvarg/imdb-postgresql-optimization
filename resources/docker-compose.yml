@@ -1,0 +1,163 @@
+name: imdb-db-project
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: imdb_postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-imdb}
+      POSTGRES_USER: ${POSTGRES_USER:-imdb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imdb_pass}
+      # Page-level checksums make silent I/O corruption detectable. Cheap on modern CPUs.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: Asia/Tehran
+
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      # Named volume, NOT a Windows bind mount: PGDATA on an NTFS bind mount is slow
+      # and breaks the uid/permission model the postgres image relies on.
+      - pgdata:/var/lib/postgresql/data
+      # Executed once, only when the data directory is empty (first `up`).
+      - ./init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+
+    # Parallel workers exchange tuples through /dev/shm. Docker's 64MB default
+    # makes large parallel hash joins fail with "No space left on device".
+    shm_size: "1gb"
+
+    # Give the server time to finish a shutdown checkpoint instead of being killed.
+    stop_grace_period: 2m
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-imdb} -d ${POSTGRES_DB:-imdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          # Host has 15.6 GB RAM. The WSL2 VM is capped at 10 GB (see wslconfig.sample),
+          # and this container is capped at 6 GB, leaving headroom for Windows,
+          # Docker Desktop itself, and the host-side Python producer/consumer.
+          memory: 6g
+          cpus: "8"
+
+    command:
+      - "postgres"
+
+      # ---------------------------------------------------------------
+      # Memory
+      # ---------------------------------------------------------------
+      # 25% of the container's 6 GB limit. This is a cache, not a hard
+      # allocation ceiling: the OS page cache still does most of the work.
+      - "-c"
+      - "shared_buffers=1536MB"
+      # Planner hint only; allocates nothing. Estimates how much of the table
+      # the kernel is likely to have cached, which pushes the planner toward
+      # index scans. ~= shared_buffers + WSL page cache we expect to get.
+      - "-c"
+      - "effective_cache_size=4GB"
+      # Per sort/hash node, per backend. 32MB is deliberately conservative because
+      # a single parallel query can allocate it once per worker per node.
+      # The 8 report scenarios raise it per-session instead of globally.
+      - "-c"
+      - "work_mem=32MB"
+      # Used by CREATE INDEX, VACUUM and ALTER TABLE. Building the 90M-row
+      # title_principals primary key is the reason this is large.
+      - "-c"
+      - "maintenance_work_mem=768MB"
+
+      # ---------------------------------------------------------------
+      # WAL and checkpoints (bulk-load oriented)
+      # ---------------------------------------------------------------
+      - "-c"
+      - "wal_buffers=16MB"
+      # Small max_wal_size forces frequent checkpoints, which is the classic
+      # way to make a bulk load I/O-bound. 4GB spreads the write-out.
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "checkpoint_timeout=15min"
+      # Spread checkpoint writes over 90% of the interval instead of spiking.
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      # Trades a little CPU for markedly less WAL volume during ingestion.
+      - "-c"
+      - "wal_compression=lz4"
+
+      # ---------------------------------------------------------------
+      # Planner cost model (NVMe SSD, not spinning rust)
+      # ---------------------------------------------------------------
+      # Default 4.0 assumes a seek-bound disk and systematically over-penalises
+      # index scans on SSDs. 1.1 keeps seq scans marginally cheaper per page.
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "seq_page_cost=1.0"
+      # How many concurrent page prefetches a bitmap heap scan may issue.
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "default_statistics_target=100"
+
+      # ---------------------------------------------------------------
+      # TOAST compression
+      # ---------------------------------------------------------------
+      # Directly relevant to the batched-JSONB design: lz4 is several times
+      # faster than pglz at a comparable ratio on repetitive JSON keys.
+      - "-c"
+      - "default_toast_compression=lz4"
+
+      # ---------------------------------------------------------------
+      # Parallelism (host: 8 physical / 12 logical cores)
+      # ---------------------------------------------------------------
+      - "-c"
+      - "max_connections=50"
+      - "-c"
+      - "max_worker_processes=8"
+      - "-c"
+      - "max_parallel_workers=8"
+      - "-c"
+      - "max_parallel_workers_per_gather=4"
+      - "-c"
+      - "max_parallel_maintenance_workers=4"
+
+      # ---------------------------------------------------------------
+      # Autovacuum (the queue table churns hard)
+      # ---------------------------------------------------------------
+      - "-c"
+      - "autovacuum_naptime=10s"
+      - "-c"
+      - "autovacuum_vacuum_cost_limit=2000"
+
+      # ---------------------------------------------------------------
+      # Observability for the performance-analysis section
+      # ---------------------------------------------------------------
+      # Required for EXPLAIN (ANALYZE, BUFFERS) to report real I/O timings.
+      - "-c"
+      - "track_io_timing=on"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.max=10000"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "log_min_duration_statement=1000"
+      # JIT compilation adds a variable few-hundred-ms overhead to exactly the
+      # kind of aggregate query the 8 scenarios use, which pollutes before/after
+      # timing comparisons. Disabled for measurement stability; flip to `on`
+      # if you want to report its effect separately.
+      - "-c"
+      - "jit=off"
+
+volumes:
+  pgdata:
+    name: imdb_pgdata
