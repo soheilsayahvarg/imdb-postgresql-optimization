@@ -1,0 +1,44 @@
+\section{معماری و محیط اجرا}
+\label{sec:architecture}
+
+\subsection{محیط اجرا: \lr{Docker Compose}}
+
+پایگاه‌داده در یک کانتینر \lr{PostgreSQL 16} با \lr{docker-compose} اجرا می‌شود. جدول \ref{tab:pgconf} مهم‌ترین تنظیمات و دلیل هرکدام را نشان می‌دهد.
+
+\begin{table}[h]
+\centering
+\caption{تنظیمات اصلی \lr{PostgreSQL} در \lr{docker-compose.yml}}
+\label{tab:pgconf}
+\begin{tabular}{@{}p{4.2cm}p{2.8cm}p{7cm}@{}}
+\toprule
+\textbf{پارامتر} & \textbf{مقدار} & \textbf{دلیل} \\
+\midrule
+\lr{shared\_buffers} & \lr{1536MB} & کش مشترک پایگاه‌داده؛ حدود یک‌چهارم تا یک‌سوم حافظه‌ی کل کانتینر (\lr{6GB}). \\
+\lr{work\_mem} & \lr{32MB} (سراسری) & عمداً کم نگه داشته شده تا در خط پایه، ریزش (\lr{spill}) عملیات‌های \lr{Hash Join}/\lr{Sort} روی دیسک دیده شود؛ برای سناریوهای سنگین‌تر، اسکریپت اجرا این مقدار را فقط در سطح همان نشست بالا می‌برد. \\
+\lr{effective\_cache\_size} & (متناسب با حافظه‌ی کل) & کمک می‌کند برنامه‌ریز کوئری تخمین بهتری از حافظه‌ی نهان سیستم‌عامل داشته باشد. \\
+\lr{wal\_compression} & \lr{lz4} & رکوردهای \lr{WAL} را فشرده می‌کند تا حجم نوشتار دیسک کمتر شود. \\
+\Rl{default_toast_compression} & \lr{lz4} & فشرده‌سازی پیش‌فرض \lr{TOAST} برای ستون‌های متغیرطول. \\
+\lr{jit} & \lr{off} & چون کوئری‌های این پروژه تحلیلی و کوتاه‌مدت‌اند، خاموش‌کردن \lr{JIT} برنامه‌ریزی را پیش‌بینی‌پذیرتر می‌کند. \\
+\lr{track\_io\_timing} & \lr{on} & تا \lr{EXPLAIN (BUFFERS)} بتواند زمان واقعی \lr{I/O} را هم نشان دهد. \\
+\Rl{shared_preload_libraries} & \Rl{pg_stat_statements} & برای جمع‌آوری آمار هر کوئری. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+کانتینر با محدودیت حافظه‌ی \lr{6GB} و \lr{shm\_size} برابر \lr{1GB} اجرا می‌شود. داده هم روی یک والیوم نام‌گذاری‌شده (\lr{pgdata}) ذخیره می‌شود تا با ری‌استارت کانتینر از بین نرود.
+
+\subsection{طراحی اسکیما}
+
+هفت جدول اصلی \lr{IMDb} در اسکیمای \lr{imdb} تعریف شده‌اند: \lr{title\_basics}، \lr{title\_ratings}، \lr{title\_crew}، \lr{title\_episode}، \lr{name\_basics}، \lr{title\_principals} و \lr{title\_akas}. اسم ستون‌ها هم \lr{snake\_case} شده‌ی همان اسم‌های \lr{camelCase} فایل‌های اصلی \lr{TSV} است.
+
+سه نکته‌ی طراحی مهم:
+
+\begin{enumerate}
+\item \textbf{ستون \lr{metadata JSONB} روی هر جدول.} هر جدول یک ستون \lr{JSONB} قابل‌تهی دارد که هم برای نگه‌داشتن داده‌ی مشتق‌شده (مثلاً دسته‌بندی امتیاز در \lr{title\_ratings}) و هم برای نشان‌دادن عملیِ مکانیزم \lr{TOAST} استفاده می‌شود. روی دو جدول بزرگ (\lr{title\_principals} و \lr{title\_akas}) این ستون همیشه \lr{NULL} می‌ماند.
+
+\item \textbf{بدون کلید خارجی در ابتدا.} چون پیام‌ها ممکن است خارج از ترتیب از صف بیرون بیایند (مثلاً یک سطر \lr{title\_ratings} قبل از سطر والدش در \lr{title\_basics} برسد)، اگر از اول کلید خارجی بگذاریم، درج‌های درست هم شکست می‌خورند؛ ضمن این‌که یک بررسی ایندکسی اضافه به ازای هر سطر، روی یک بارگذاری \lr{190} میلیون سطری هزینه‌ی زیادی دارد. به همین دلیل کلید خارجی را بعد از تمام‌شدن بارگذاری، به‌صورت \lr{NOT VALID} و بعد \lr{VALIDATE CONSTRAINT}، اضافه می‌کنیم.
+
+\item \textbf{ترتیب فیلدها در \lr{title\_principals}.} ستون عددی \lr{ordering} قبل از ستون‌های متنی نوشته شده. چون ترتیب فیلدها در \lr{PostgreSQL} دقیقاً همان ترتیب اعلامشان است، اگر یک عدد \lr{4}بایتی بعد از یک رشته‌ی کوتاه بیاید، باز هم باید هم‌ترازیِ \lr{4}بایتی رعایت شود و تا \lr{3} بایت در هر سطر هدر می‌رود. روی \lr{90} میلیون سطر، این یعنی حدود \lr{150} مگابایت فضای اضافه که با تغییر ترتیب حذف می‌شود.
+\end{enumerate}
+
+سه افزونه هم در راه‌اندازی اولیه فعال می‌شوند: \lr{pg\_stat\_statements} (آمار هر کوئری)، \lr{btree\_gin} (که در بخش \ref{sec:indexing} برای ساخت یک ایندکس \lr{GIN} ترکیبی استفاده می‌شود)، و \lr{pgstattuple} (برای اندازه‌گیری واقعی نسبت فشرده‌سازی \lr{TOAST}).
