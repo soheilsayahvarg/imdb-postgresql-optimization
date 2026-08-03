@@ -1,0 +1,72 @@
+===== SCENARIO 03: Top 20 directors by number of movies, with their average rating =====
+Limit  (cost=1564535.71..1564535.76 rows=20 width=96) (actual time=147641.546..147661.130 rows=20 loops=1)
+  Buffers: shared hit=1199159 read=645775 written=67440
+  I/O Timings: shared read=136983.454 write=2351.063
+  ->  Sort  (cost=1564535.71..1582609.81 rows=7229640 width=96) (actual time=147641.543..147661.122 rows=20 loops=1)
+        Sort Key: (count(*)) DESC, (avg(tr.average_rating)) DESC NULLS LAST
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=1199159 read=645775 written=67440
+        I/O Timings: shared read=136983.454 write=2351.063
+        ->  HashAggregate  (cost=1164870.25..1372157.59 rows=7229640 width=96) (actual time=147328.510..147577.108 rows=286901 loops=1)
+              Group Key: nb.nconst
+              Planned Partitions: 32  Batches: 1  Memory Usage: 126993kB
+              Buffers: shared hit=1199156 read=645775 written=67440
+              I/O Timings: shared read=136983.454 write=2351.063
+              ->  Nested Loop  (cost=464144.77..857328.14 rows=7229640 width=30) (actual time=9784.172..144206.662 rows=756951 loops=1)
+                    Buffers: shared hit=1199156 read=645775 written=67440
+                    I/O Timings: shared read=136983.454 write=2351.063
+                    ->  Nested Loop  (cost=464144.20..676556.60 rows=7229640 width=38) (actual time=9767.989..14745.155 rows=756999 loops=1)
+                          Buffers: shared hit=43880 read=366362
+                          I/O Timings: shared read=28184.699
+                          ->  Gather  (cost=464144.19..573300.00 rows=722964 width=48) (actual time=9766.000..10495.674 rows=753874 loops=1)
+                                Workers Planned: 4
+                                Workers Launched: 4
+                                Buffers: shared hit=43880 read=366362
+                                I/O Timings: shared read=28184.699
+                                ->  Parallel Hash Right Join  (cost=463144.19..500003.60 rows=180741 width=48) (actual time=9759.658..10593.885 rows=150775 loops=5)
+                                      Hash Cond: (tr.tconst = tc.tconst)
+                                      Buffers: shared hit=43880 read=366362
+                                      I/O Timings: shared read=28184.699
+                                      ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..35203.15 rows=425515 width=16) (actual time=0.937..272.915 rows=340413 loops=5)
+                                            Buffers: shared hit=30948
+                                      ->  Parallel Hash  (cost=460884.93..460884.93 rows=180741 width=52) (actual time=9755.173..9755.253 rows=150775 loops=5)
+                                            Buckets: 1048576  Batches: 1  Memory Usage: 66080kB
+                                            Buffers: shared hit=12532 read=366362
+                                            I/O Timings: shared read=28184.699
+                                            ->  Parallel Hash Join  (cost=272312.64..460884.93 rows=180741 width=52) (actual time=590.640..8232.237 rows=150775 loops=5)
+                                                  Hash Cond: (tc.tconst = tb.tconst)
+                                                  Buffers: shared hit=12532 read=366362
+                                                  I/O Timings: shared read=28184.699
+                                                  ->  Parallel Seq Scan on title_crew tc  (cost=0.00..180240.43 rows=3174043 width=52) (actual time=0.415..5992.836 rows=2537886 loops=5)
+                                                        Buffers: shared hit=33 read=148467
+                                                        I/O Timings: shared read=27755.375
+                                                  ->  Parallel Hash  (cost=270053.38..270053.38 rows=180741 width=10) (actual time=588.720..588.722 rows=150775 loops=5)
+                                                        Buckets: 1048576  Batches: 1  Memory Usage: 43648kB
+                                                        Buffers: shared hit=12499 read=217895
+                                                        I/O Timings: shared read=429.324
+                                                        ->  Parallel Seq Scan on title_basics tb  (cost=0.00..270053.38 rows=180741 width=10) (actual time=0.437..423.193 rows=150775 loops=5)
+                                                              Filter: (title_type = 'movie'::text)
+                                                              Rows Removed by Filter: 2387111
+                                                              Buffers: shared hit=12499 read=217895
+                                                              I/O Timings: shared read=429.324
+                          ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.004..0.005 rows=1 loops=753874)
+                                Cache Key: tc.directors
+                                Cache Mode: binary
+                                Hits: 477493  Misses: 276381  Evictions: 0  Overflows: 0  Memory Usage: 42881kB
+                                ->  Function Scan on unnest d  (cost=0.00..0.10 rows=10 width=32) (actual time=0.004..0.005 rows=1 loops=276381)
+                    ->  Memoize  (cost=0.57..2.79 rows=1 width=24) (actual time=0.170..0.170 rows=1 loops=756999)
+                          Cache Key: d.nconst
+                          Cache Mode: logical
+                          Hits: 470052  Misses: 286947  Evictions: 0  Overflows: 0  Memory Usage: 36802kB
+                          Buffers: shared hit=1155276 read=279413 written=67440
+                          I/O Timings: shared read=108798.755 write=2351.063
+                          ->  Index Scan using name_basics_pkey on name_basics nb  (cost=0.56..2.78 rows=1 width=24) (actual time=0.439..0.439 rows=1 loops=286947)
+                                Index Cond: (nconst = d.nconst)
+                                Buffers: shared hit=1155276 read=279413 written=67440
+                                I/O Timings: shared read=108798.755 write=2351.063
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=107 read=9 dirtied=1
+  I/O Timings: shared read=11.009
+Planning Time: 22.301 ms
+Execution Time: 147701.289 ms

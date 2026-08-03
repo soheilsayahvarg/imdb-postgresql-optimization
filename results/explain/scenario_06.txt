@@ -1,0 +1,55 @@
+===== SCENARIO 06: Series with the most seasons (from title.episode) =====
+Limit  (cost=1668837.77..1668837.82 rows=20 width=47) (actual time=34598.932..34672.736 rows=20 loops=1)
+  Buffers: shared hit=2135501 read=248270, temp read=40786 written=40794
+  I/O Timings: shared read=68618.584, temp read=1414.391 write=5191.497
+  ->  Sort  (cost=1668837.77..1688250.36 rows=7765037 width=47) (actual time=34598.911..34672.711 rows=20 loops=1)
+        Sort Key: (count(DISTINCT te.season_number)) DESC, (count(*)) DESC
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=2135501 read=248270, temp read=40786 written=40794
+        I/O Timings: shared read=68618.584, temp read=1414.391 write=5191.497
+        ->  GroupAggregate  (cost=396580.86..1462212.92 rows=7765037 width=47) (actual time=28901.269..34583.753 rows=213899 loops=1)
+              Group Key: pb.tconst
+              Buffers: shared hit=2135501 read=248270, temp read=40786 written=40794
+              I/O Timings: shared read=68618.584, temp read=1414.391 write=5191.497
+              ->  Gather Merge  (cost=396580.86..1326324.78 rows=7765037 width=35) (actual time=28901.064..33201.122 rows=7760548 loops=1)
+                    Workers Planned: 4
+                    Workers Launched: 4
+                    Buffers: shared hit=2135501 read=248270, temp read=40786 written=40794
+                    I/O Timings: shared read=68618.584, temp read=1414.391 write=5191.497
+                    ->  Sort  (cost=395580.81..400433.95 rows=1941259 width=35) (actual time=27695.226..28229.457 rows=1552110 loops=5)
+                          Sort Key: pb.tconst, te.season_number
+                          Sort Method: external merge  Disk: 66544kB
+                          Buffers: shared hit=2135501 read=248270, temp read=40786 written=40794
+                          I/O Timings: shared read=68618.584, temp read=1414.391 write=5191.497
+                          Worker 0:  Sort Method: external merge  Disk: 66456kB
+                          Worker 1:  Sort Method: external merge  Disk: 66488kB
+                          Worker 2:  Sort Method: external merge  Disk: 62648kB
+                          Worker 3:  Sort Method: external merge  Disk: 64152kB
+                          ->  Nested Loop  (cost=0.57..161737.92 rows=1941259 width=35) (actual time=0.952..18746.023 rows=1552110 loops=5)
+                                Buffers: shared hit=2135434 read=248269
+                                I/O Timings: shared read=68618.124
+                                ->  Parallel Seq Scan on title_episode te  (cost=0.00..94799.10 rows=1941259 width=14) (actual time=0.518..1535.543 rows=1552110 loops=5)
+                                      Filter: (season_number IS NOT NULL)
+                                      Rows Removed by Filter: 409510
+                                      Buffers: shared read=70280
+                                      I/O Timings: shared read=5526.022
+                                ->  Memoize  (cost=0.57..0.63 rows=1 width=31) (actual time=0.011..0.011 rows=1 loops=7760549)
+                                      Cache Key: te.parent_tconst
+                                      Cache Mode: logical
+                                      Hits: 1485762  Misses: 93897  Evictions: 0  Overflows: 0  Memory Usage: 12398kB
+                                      Buffers: shared hit=2135434 read=177989
+                                      I/O Timings: shared read=63092.102
+                                      Worker 0:  Hits: 1489417  Misses: 92847  Evictions: 0  Overflows: 0  Memory Usage: 12254kB
+                                      Worker 1:  Hits: 1488289  Misses: 92969  Evictions: 0  Overflows: 0  Memory Usage: 12273kB
+                                      Worker 2:  Hits: 1400918  Misses: 90352  Evictions: 0  Overflows: 0  Memory Usage: 11930kB
+                                      Worker 3:  Hits: 1433479  Misses: 92619  Evictions: 0  Overflows: 0  Memory Usage: 12231kB
+                                      ->  Index Scan using title_basics_pkey on title_basics pb  (cost=0.56..0.62 rows=1 width=31) (actual time=0.166..0.166 rows=1 loops=462684)
+                                            Index Cond: (tconst = te.parent_tconst)
+                                            Buffers: shared hit=2135434 read=177989
+                                            I/O Timings: shared read=63092.102
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=15 read=16 dirtied=3
+  I/O Timings: shared read=4.341
+Planning Time: 7.934 ms
+Execution Time: 34690.975 ms

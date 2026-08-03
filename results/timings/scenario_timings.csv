@@ -1,0 +1,17 @@
+phase,scenario,title,exec_ms,wall_s,rows
+before,1,Average rating of movies by genre,4381.2,1.527,27
+before,2,Top 10 movies by number of votes (min 1000 votes),93.0,0.064,10
+before,3,"Top 20 directors by number of movies, with their average rating",147701.3,80.658,20
+before,4,"Yearly average rating of movies, 2000 onward",10381.5,0.760,27
+before,5,Actors who appeared in more than 5 distinct movie genres,22671.7,10.918,47536
+before,6,Series with the most seasons (from title.episode),34691.0,10.494,20
+before,7,Most common pair of genres in movies,3852.0,0.961,20
+before,8,Top 5 longest movies per genre,2803.6,2.321,135
+after,1,Average rating of movies by genre,8953.3,2.568,27
+after,2,Top 10 movies by number of votes (min 1000 votes),12.7,0.001,10
+after,3,"Top 20 directors by number of movies, with their average rating",101420.8,64.335,20
+after,4,"Yearly average rating of movies, 2000 onward",5224.3,0.749,27
+after,5,Actors who appeared in more than 5 distinct movie genres,15555.8,10.689,47536
+after,6,Series with the most seasons (from title.episode),22079.1,5.833,20
+after,7,Most common pair of genres in movies,1143.7,0.730,20
+after,8,Top 5 longest movies per genre,1930.8,1.859,135

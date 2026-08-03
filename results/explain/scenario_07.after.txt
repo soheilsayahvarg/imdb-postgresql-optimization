@@ -1,0 +1,77 @@
+===== SCENARIO 07: Most common pair of genres in movies =====
+Limit  (cost=610890.02..610890.07 rows=20 width=72) (actual time=1115.460..1142.103 rows=20 loops=1)
+  Buffers: shared hit=67911 read=106690
+  I/O Timings: shared read=977.849
+  ->  Sort  (cost=610890.02..610890.27 rows=100 width=72) (actual time=1115.457..1142.097 rows=20 loops=1)
+        Sort Key: (count(*)) DESC
+        Sort Method: top-N heapsort  Memory: 26kB
+        Buffers: shared hit=67911 read=106690
+        I/O Timings: shared read=977.849
+        ->  Finalize GroupAggregate  (cost=610835.47..610887.36 rows=100 width=72) (actual time=1114.808..1142.029 rows=310 loops=1)
+              Group Key: g1.genre, g2.genre
+              Buffers: shared hit=67911 read=106690
+              I/O Timings: shared read=977.849
+              ->  Gather Merge  (cost=610835.47..610883.36 rows=400 width=72) (actual time=1114.794..1141.821 rows=1382 loops=1)
+                    Workers Planned: 4
+                    Workers Launched: 4
+                    Buffers: shared hit=67911 read=106690
+                    I/O Timings: shared read=977.849
+                    ->  Sort  (cost=609835.41..609835.66 rows=100 width=72) (actual time=1091.094..1091.111 rows=276 loops=5)
+                          Sort Key: g1.genre, g2.genre
+                          Sort Method: quicksort  Memory: 38kB
+                          Buffers: shared hit=67911 read=106690
+                          I/O Timings: shared read=977.849
+                          Worker 0:  Sort Method: quicksort  Memory: 38kB
+                          Worker 1:  Sort Method: quicksort  Memory: 38kB
+                          Worker 2:  Sort Method: quicksort  Memory: 38kB
+                          Worker 3:  Sort Method: quicksort  Memory: 38kB
+                          ->  Partial HashAggregate  (cost=609831.09..609832.09 rows=100 width=72) (actual time=1090.686..1090.731 rows=276 loops=5)
+                                Group Key: g1.genre, g2.genre
+                                Batches: 1  Memory Usage: 77kB
+                                Buffers: shared hit=67875 read=106690
+                                I/O Timings: shared read=977.849
+                                Worker 0:  Batches: 1  Memory Usage: 77kB
+                                Worker 1:  Batches: 1  Memory Usage: 77kB
+                                Worker 2:  Batches: 1  Memory Usage: 77kB
+                                Worker 3:  Batches: 1  Memory Usage: 77kB
+                                ->  Nested Loop  (cost=4224.06..563529.52 rows=6173542 width=64) (actual time=215.709..1047.648 rows=94106 loops=5)
+                                      Join Filter: (g1.genre < g2.genre)
+                                      Rows Removed by Join Filter: 301435
+                                      Buffers: shared hit=67875 read=106690
+                                      I/O Timings: shared read=977.849
+                                      ->  Nested Loop  (cost=4224.05..262484.19 rows=1852062 width=73) (actual time=214.937..859.619 rows=207329 loops=5)
+                                            Buffers: shared hit=67875 read=106690
+                                            I/O Timings: shared read=977.849
+                                            ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=4224.04..236933.12 rows=185206 width=41) (actual time=214.675..722.582 rows=150775 loops=5)
+                                                  Recheck Cond: (title_type = 'movie'::text)
+                                                  Heap Blocks: exact=38821
+                                                  Buffers: shared hit=67875 read=106690
+                                                  I/O Timings: shared read=977.849
+                                                  ->  Bitmap Index Scan on idx_title_basics_type_genres_gin  (cost=0.00..4038.83 rows=740825 width=0) (actual time=162.360..162.360 rows=753874 loops=1)
+                                                        Index Cond: (title_type = 'movie'::text)
+                                                        Buffers: shared hit=1 read=123
+                                                        I/O Timings: shared read=12.092
+                                            ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.000 rows=1 loops=753874)
+                                                  Cache Key: tb.genres
+                                                  Cache Mode: binary
+                                                  Hits: 164910  Misses: 1102  Evictions: 0  Overflows: 0  Memory Usage: 247kB
+                                                  Worker 0:  Hits: 145975  Misses: 1049  Evictions: 0  Overflows: 0  Memory Usage: 235kB
+                                                  Worker 1:  Hits: 143545  Misses: 1052  Evictions: 0  Overflows: 0  Memory Usage: 235kB
+                                                  Worker 2:  Hits: 149432  Misses: 1060  Evictions: 0  Overflows: 0  Memory Usage: 237kB
+                                                  Worker 3:  Hits: 144703  Misses: 1046  Evictions: 0  Overflows: 0  Memory Usage: 234kB
+                                                  ->  Function Scan on unnest g1  (cost=0.00..0.10 rows=10 width=32) (actual time=0.003..0.003 rows=3 loops=5309)
+                                      ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.000 rows=2 loops=1036647)
+                                            Cache Key: tb.genres
+                                            Cache Mode: binary
+                                            Hits: 226846  Misses: 1101  Evictions: 0  Overflows: 0  Memory Usage: 247kB
+                                            Worker 0:  Hits: 200003  Misses: 1048  Evictions: 0  Overflows: 0  Memory Usage: 235kB
+                                            Worker 1:  Hits: 198076  Misses: 1051  Evictions: 0  Overflows: 0  Memory Usage: 235kB
+                                            Worker 2:  Hits: 206183  Misses: 1059  Evictions: 0  Overflows: 0  Memory Usage: 237kB
+                                            Worker 3:  Hits: 200235  Misses: 1045  Evictions: 0  Overflows: 0  Memory Usage: 234kB
+                                            ->  Function Scan on unnest g2  (cost=0.00..0.10 rows=10 width=32) (actual time=0.001..0.001 rows=3 loops=5304)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared read=1
+  I/O Timings: shared read=0.014
+Planning Time: 0.385 ms
+Execution Time: 1143.662 ms

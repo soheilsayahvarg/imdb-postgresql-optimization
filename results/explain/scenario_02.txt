@@ -1,0 +1,34 @@
+===== SCENARIO 02: Top 10 movies by number of votes (min 1000 votes) =====
+Limit  (cost=39181.57..39576.48 rows=10 width=43) (actual time=71.258..92.929 rows=10 loops=1)
+  Buffers: shared hit=31204 read=32
+  I/O Timings: shared read=14.279
+  ->  Nested Loop  (cost=39181.57..273995.22 rows=5946 width=43) (actual time=71.255..92.915 rows=10 loops=1)
+        Buffers: shared hit=31204 read=32
+        I/O Timings: shared read=14.279
+        ->  Gather Merge  (cost=39181.01..51677.60 rows=104369 width=20) (actual time=69.804..77.807 rows=12 loops=1)
+              Workers Planned: 4
+              Workers Launched: 4
+              Buffers: shared hit=31176
+              ->  Sort  (cost=38180.95..38246.18 rows=26092 width=20) (actual time=63.615..63.796 rows=1093 loops=5)
+                    Sort Key: tr.num_votes DESC
+                    Sort Method: quicksort  Memory: 1886kB
+                    Buffers: shared hit=31176
+                    Worker 0:  Sort Method: quicksort  Memory: 1718kB
+                    Worker 1:  Sort Method: quicksort  Memory: 1737kB
+                    Worker 2:  Sort Method: quicksort  Memory: 1637kB
+                    Worker 3:  Sort Method: quicksort  Memory: 1855kB
+                    ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..36266.93 rows=26092 width=20) (actual time=0.015..48.490 rows=21290 loops=5)
+                          Filter: (num_votes >= 1000)
+                          Rows Removed by Filter: 319124
+                          Buffers: shared hit=30948
+        ->  Index Scan using title_basics_pkey on title_basics tb  (cost=0.56..2.13 rows=1 width=33) (actual time=1.253..1.253 rows=1 loops=12)
+              Index Cond: (tconst = tr.tconst)
+              Filter: (title_type = 'movie'::text)
+              Rows Removed by Filter: 0
+              Buffers: shared hit=28 read=32
+              I/O Timings: shared read=14.279
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=51
+Planning Time: 3.730 ms
+Execution Time: 93.016 ms

@@ -1,0 +1,22 @@
+===== SCENARIO 02: Top 10 movies by number of votes (min 1000 votes) =====
+Limit  (cost=0.85..414.84 rows=10 width=43) (actual time=2.379..12.610 rows=10 loops=1)
+  Buffers: shared hit=43 read=31
+  I/O Timings: shared read=11.623
+  ->  Nested Loop  (cost=0.85..268804.46 rows=6493 width=43) (actual time=2.377..12.596 rows=10 loops=1)
+        Buffers: shared hit=43 read=31
+        I/O Timings: shared read=11.623
+        ->  Index Scan using idx_title_ratings_votes_desc on title_ratings tr  (cost=0.29..35046.68 rows=111176 width=20) (actual time=1.171..1.235 rows=12 loops=1)
+              Buffers: shared hit=12 read=2
+              I/O Timings: shared read=1.143
+        ->  Index Scan using title_basics_pkey on title_basics tb  (cost=0.56..2.10 rows=1 width=33) (actual time=0.939..0.939 rows=1 loops=12)
+              Index Cond: (tconst = tr.tconst)
+              Filter: (title_type = 'movie'::text)
+              Rows Removed by Filter: 0
+              Buffers: shared hit=31 read=29
+              I/O Timings: shared read=10.480
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=23 read=19 dirtied=1
+  I/O Timings: shared read=6.209
+Planning Time: 7.632 ms
+Execution Time: 12.683 ms

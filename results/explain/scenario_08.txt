@@ -1,0 +1,45 @@
+===== SCENARIO 08: Top 5 longest movies per genre =====
+Subquery Scan on ranked  (cost=343082.23..733657.56 rows=2608450 width=67) (actual time=1907.097..2797.903 rows=135 loops=1)
+  Buffers: shared hit=115417 read=115045
+  I/O Timings: shared read=508.060
+  ->  WindowAgg  (cost=343082.23..707573.06 rows=2608450 width=75) (actual time=1907.093..2797.840 rows=135 loops=1)
+        Run Condition: (row_number() OVER (?) <= 5)
+        Buffers: shared hit=115417 read=115045
+        I/O Timings: shared read=508.060
+        ->  Gather Merge  (cost=343082.23..655404.06 rows=2608450 width=67) (actual time=1901.688..2706.351 rows=741562 loops=1)
+              Workers Planned: 4
+              Workers Launched: 4
+              Buffers: shared hit=115417 read=115045
+              I/O Timings: shared read=508.060
+              ->  Sort  (cost=342082.18..343712.46 rows=652112 width=67) (actual time=1737.891..1789.133 rows=148312 loops=5)
+                    Sort Key: g.genre, tb.runtime_minutes DESC, tb.tconst
+                    Sort Method: quicksort  Memory: 19448kB
+                    Buffers: shared hit=115417 read=115045
+                    I/O Timings: shared read=508.060
+                    Worker 0:  Sort Method: quicksort  Memory: 16861kB
+                    Worker 1:  Sort Method: quicksort  Memory: 10890kB
+                    Worker 2:  Sort Method: quicksort  Memory: 12001kB
+                    Worker 3:  Sort Method: quicksort  Memory: 15987kB
+                    ->  Nested Loop  (cost=0.01..279105.24 rows=652112 width=67) (actual time=2.179..826.820 rows=148312 loops=5)
+                          Buffers: shared hit=115350 read=115044
+                          I/O Timings: shared read=506.552
+                          ->  Parallel Seq Scan on title_basics tb  (cost=0.00..270053.38 rows=65211 width=76) (actual time=2.135..687.571 rows=95056 loops=5)
+                                Filter: ((runtime_minutes IS NOT NULL) AND (title_type = 'movie'::text))
+                                Rows Removed by Filter: 2442830
+                                Buffers: shared hit=115350 read=115044
+                                I/O Timings: shared read=506.552
+                          ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.001..0.001 rows=2 loops=475280)
+                                Cache Key: tb.genres
+                                Cache Mode: binary
+                                Hits: 123305  Misses: 1059  Evictions: 0  Overflows: 0  Memory Usage: 237kB
+                                Worker 0:  Hits: 99382  Misses: 984  Evictions: 0  Overflows: 0  Memory Usage: 220kB
+                                Worker 1:  Hits: 72183  Misses: 923  Evictions: 0  Overflows: 0  Memory Usage: 206kB
+                                Worker 2:  Hits: 82754  Misses: 973  Evictions: 0  Overflows: 0  Memory Usage: 217kB
+                                Worker 3:  Hits: 92758  Misses: 959  Evictions: 0  Overflows: 0  Memory Usage: 214kB
+                                ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.005..0.005 rows=3 loops=4898)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=4 read=3 dirtied=1
+  I/O Timings: shared read=1.154
+Planning Time: 8.320 ms
+Execution Time: 2803.599 ms

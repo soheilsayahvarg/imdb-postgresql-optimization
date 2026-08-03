@@ -1,0 +1,49 @@
+===== SCENARIO 04: Yearly average rating of movies, 2000 onward =====
+Finalize GroupAggregate  (cost=276918.68..277162.50 rows=132 width=42) (actual time=5203.238..5222.452 rows=27 loops=1)
+  Group Key: tb.start_year
+  Buffers: shared hit=103 read=180000
+  I/O Timings: shared read=16104.861
+  ->  Gather Merge  (cost=276918.68..277155.24 rows=528 width=42) (actual time=5202.949..5222.201 rows=135 loops=1)
+        Workers Planned: 4
+        Workers Launched: 4
+        Buffers: shared hit=103 read=180000
+        I/O Timings: shared read=16104.861
+        ->  Partial GroupAggregate  (cost=275918.63..276092.30 rows=132 width=42) (actual time=5125.896..5136.818 rows=27 loops=5)
+              Group Key: tb.start_year
+              Buffers: shared hit=103 read=180000
+              I/O Timings: shared read=16104.861
+              ->  Sort  (cost=275918.63..275961.63 rows=17202 width=8) (actual time=5125.651..5129.668 rows=42651 loops=5)
+                    Sort Key: tb.start_year
+                    Sort Method: quicksort  Memory: 3324kB
+                    Buffers: shared hit=103 read=180000
+                    I/O Timings: shared read=16104.861
+                    Worker 0:  Sort Method: quicksort  Memory: 3127kB
+                    Worker 1:  Sort Method: quicksort  Memory: 3148kB
+                    Worker 2:  Sort Method: quicksort  Memory: 3087kB
+                    Worker 3:  Sort Method: quicksort  Memory: 3155kB
+                    ->  Parallel Hash Join  (cost=238388.25..274708.44 rows=17202 width=8) (actual time=4772.092..5092.665 rows=42651 loops=5)
+                          Hash Cond: (tr.tconst = tb.tconst)
+                          Buffers: shared hit=73 read=179998
+                          I/O Timings: shared read=16104.251
+                          ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..35203.20 rows=425520 width=16) (actual time=0.310..148.054 rows=340413 loops=5)
+                                Buffers: shared read=30948
+                                I/O Timings: shared read=474.718
+                          ->  Parallel Hash  (cost=236785.70..236785.70 rows=128204 width=12) (actual time=4755.536..4755.537 rows=76458 loops=5)
+                                Buckets: 524288  Batches: 1  Memory Usage: 22112kB
+                                Buffers: shared hit=3 read=149048
+                                I/O Timings: shared read=15628.880
+                                ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=4468.64..236785.70 rows=128204 width=12) (actual time=147.214..4666.960 rows=76458 loops=5)
+                                      Recheck Cond: ((start_year >= 2000) AND (title_type = 'movie'::text))
+                                      Heap Blocks: exact=28589
+                                      Buffers: shared hit=3 read=149048
+                                      I/O Timings: shared read=15628.880
+                                      ->  Bitmap Index Scan on idx_title_basics_movie_year  (cost=0.00..4340.44 rows=512815 width=0) (actual time=128.979..128.980 rows=382289 loops=1)
+                                            Index Cond: (start_year >= 2000)
+                                            Buffers: shared hit=3 read=326
+                                            I/O Timings: shared read=10.197
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=4 read=18
+  I/O Timings: shared read=6.305
+Planning Time: 12.624 ms
+Execution Time: 5224.309 ms

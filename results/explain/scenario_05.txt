@@ -1,0 +1,78 @@
+===== SCENARIO 05: Actors who appeared in more than 5 distinct movie genres =====
+Sort  (cost=716059.11..718073.15 rows=805613 width=32) (actual time=22643.725..22652.860 rows=47536 loops=1)
+  Sort Key: (count(DISTINCT g.genre)) DESC, nb.primary_name
+  Sort Method: quicksort  Memory: 4305kB
+  Buffers: shared hit=10737033 read=223012
+  I/O Timings: shared read=39587.352
+  ->  GroupAggregate  (cost=423722.27..637029.58 rows=805613 width=32) (actual time=16535.994..22493.926 rows=47536 loops=1)
+        Group Key: nb.nconst
+        Filter: (count(DISTINCT g.genre) > 5)
+        Rows Removed by Filter: 338130
+        Buffers: shared hit=10737033 read=223012
+        I/O Timings: shared read=39587.352
+        ->  Incremental Sort  (cost=423722.27..594734.88 rows=2416840 width=56) (actual time=16535.734..21775.712 rows=2716383 loops=1)
+              Sort Key: nb.nconst, g.genre
+              Presorted Key: nb.nconst
+              Full-sort Groups: 51657  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+              Pre-sorted Groups: 41435  Sort Method: quicksort  Average Memory: 43kB  Peak Memory: 44kB
+              Buffers: shared hit=10737033 read=223012
+              I/O Timings: shared read=39587.352
+              ->  Nested Loop  (cost=423722.24..485977.08 rows=2416840 width=56) (actual time=16535.122..19205.103 rows=2716383 loops=1)
+                    Buffers: shared hit=10737033 read=223012
+                    I/O Timings: shared read=39587.352
+                    ->  Gather Merge  (cost=423722.23..452660.17 rows=241684 width=65) (actual time=16534.856..17846.771 rows=1649341 loops=1)
+                          Workers Planned: 4
+                          Workers Launched: 4
+                          Buffers: shared hit=10737033 read=223012
+                          I/O Timings: shared read=39587.352
+                          ->  Sort  (cost=422722.17..422873.22 rows=60421 width=65) (actual time=16475.612..16612.427 rows=329868 loops=5)
+                                Sort Key: nb.nconst
+                                Sort Method: quicksort  Memory: 41309kB
+                                Buffers: shared hit=10737033 read=223012
+                                I/O Timings: shared read=39587.352
+                                Worker 0:  Sort Method: quicksort  Memory: 41285kB
+                                Worker 1:  Sort Method: quicksort  Memory: 42045kB
+                                Worker 2:  Sort Method: quicksort  Memory: 41836kB
+                                Worker 3:  Sort Method: quicksort  Memory: 41571kB
+                                ->  Nested Loop  (cost=1.13..417923.91 rows=60421 width=65) (actual time=2.017..14821.241 rows=329868 loops=5)
+                                      Buffers: shared hit=10736998 read=223011
+                                      I/O Timings: shared read=39586.906
+                                      ->  Nested Loop  (cost=0.57..353103.97 rows=60421 width=51) (actual time=1.718..3722.480 rows=329870 loops=5)
+                                            Buffers: shared hit=2622863 read=90405
+                                            I/O Timings: shared read=7547.350
+                                            ->  Parallel Seq Scan on title_principals tp  (cost=0.00..99654.92 rows=1060639 width=20) (actual time=0.594..1710.022 rows=840733 loops=5)
+                                                  Filter: (category = ANY ('{actor,actress}'::text[]))
+                                                  Rows Removed by Filter: 759267
+                                                  Buffers: shared read=74654
+                                                  I/O Timings: shared read=6204.659
+                                            ->  Memoize  (cost=0.57..1.04 rows=1 width=51) (actual time=0.002..0.002 rows=0 loops=4203666)
+                                                  Cache Key: tp.tconst
+                                                  Cache Mode: logical
+                                                  Hits: 748677  Misses: 107137  Evictions: 0  Overflows: 0  Memory Usage: 10673kB
+                                                  Buffers: shared hit=2622863 read=15751
+                                                  I/O Timings: shared read=1342.691
+                                                  Worker 0:  Hits: 736715  Misses: 105504  Evictions: 0  Overflows: 0  Memory Usage: 10542kB
+                                                  Worker 1:  Hits: 734373  Misses: 106000  Evictions: 0  Overflows: 0  Memory Usage: 10649kB
+                                                  Worker 2:  Hits: 739288  Misses: 105997  Evictions: 0  Overflows: 0  Memory Usage: 10645kB
+                                                  Worker 3:  Hits: 716891  Misses: 103084  Evictions: 0  Overflows: 0  Memory Usage: 10395kB
+                                                  ->  Index Scan using title_basics_pkey on title_basics tb  (cost=0.56..1.03 rows=1 width=51) (actual time=0.012..0.012 rows=0 loops=527722)
+                                                        Index Cond: (tconst = tp.tconst)
+                                                        Filter: (title_type = 'movie'::text)
+                                                        Rows Removed by Filter: 1
+                                                        Buffers: shared hit=2622863 read=15751
+                                                        I/O Timings: shared read=1342.691
+                                      ->  Index Scan using name_basics_pkey on name_basics nb  (cost=0.56..1.07 rows=1 width=24) (actual time=0.033..0.033 rows=1 loops=1649349)
+                                            Index Cond: (nconst = tp.nconst)
+                                            Buffers: shared hit=8114135 read=132606
+                                            I/O Timings: shared read=32039.556
+                    ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.000 rows=2 loops=1649341)
+                          Cache Key: tb.genres
+                          Cache Mode: binary
+                          Hits: 1648359  Misses: 982  Evictions: 0  Overflows: 0  Memory Usage: 219kB
+                          ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.004..0.005 rows=3 loops=982)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=28 read=22 dirtied=2
+  I/O Timings: shared read=13.227
+Planning Time: 19.279 ms
+Execution Time: 22671.652 ms

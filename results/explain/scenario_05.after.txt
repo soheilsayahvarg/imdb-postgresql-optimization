@@ -1,0 +1,75 @@
+===== SCENARIO 05: Actors who appeared in more than 5 distinct movie genres =====
+Sort  (cost=670655.55..672702.51 rows=818783 width=32) (actual time=15529.648..15548.869 rows=47536 loops=1)
+  Sort Key: (count(DISTINCT g.genre)) DESC, nb.primary_name
+  Sort Method: quicksort  Memory: 4305kB
+  Buffers: shared hit=8746489 read=256022
+  I/O Timings: shared read=25064.875
+  ->  GroupAggregate  (cost=373445.37..590238.28 rows=818783 width=32) (actual time=10742.996..15367.537 rows=47536 loops=1)
+        Group Key: nb.nconst
+        Filter: (count(DISTINCT g.genre) > 5)
+        Rows Removed by Filter: 338130
+        Buffers: shared hit=8746489 read=256022
+        I/O Timings: shared read=25064.875
+        ->  Incremental Sort  (cost=373445.37..547252.16 rows=2456350 width=56) (actual time=10742.591..14815.196 rows=2716383 loops=1)
+              Sort Key: nb.nconst, g.genre
+              Presorted Key: nb.nconst
+              Full-sort Groups: 51657  Sort Method: quicksort  Average Memory: 28kB  Peak Memory: 28kB
+              Pre-sorted Groups: 41435  Sort Method: quicksort  Average Memory: 43kB  Peak Memory: 44kB
+              Buffers: shared hit=8746489 read=256022
+              I/O Timings: shared read=25064.875
+              ->  Nested Loop  (cost=373445.33..436716.41 rows=2456350 width=56) (actual time=10741.773..12837.785 rows=2716383 loops=1)
+                    Buffers: shared hit=8746489 read=256022
+                    I/O Timings: shared read=25064.875
+                    ->  Gather Merge  (cost=373445.32..402856.34 rows=245635 width=65) (actual time=10741.526..11756.707 rows=1649341 loops=1)
+                          Workers Planned: 4
+                          Workers Launched: 4
+                          Buffers: shared hit=8746489 read=256022
+                          I/O Timings: shared read=25064.875
+                          ->  Sort  (cost=372445.26..372598.79 rows=61409 width=65) (actual time=10716.243..10736.430 rows=329868 loops=5)
+                                Sort Key: nb.nconst
+                                Sort Method: quicksort  Memory: 41990kB
+                                Buffers: shared hit=8746489 read=256022
+                                I/O Timings: shared read=25064.875
+                                Worker 0:  Sort Method: quicksort  Memory: 42326kB
+                                Worker 1:  Sort Method: quicksort  Memory: 41302kB
+                                Worker 2:  Sort Method: quicksort  Memory: 40791kB
+                                Worker 3:  Sort Method: quicksort  Memory: 41636kB
+                                ->  Nested Loop  (cost=239249.18..367561.36 rows=61409 width=65) (actual time=1514.214..10217.124 rows=329868 loops=5)
+                                      Buffers: shared hit=8746454 read=256021
+                                      I/O Timings: shared read=25064.855
+                                      ->  Parallel Hash Join  (cost=239248.62..301655.77 rows=61409 width=51) (actual time=1513.661..3265.146 rows=329870 loops=5)
+                                            Hash Cond: (tp.tconst = tb.tconst)
+                                            Buffers: shared hit=682569 read=73165
+                                            I/O Timings: shared read=3013.451
+                                            ->  Parallel Index Only Scan using idx_title_principals_cast on title_principals tp  (cost=0.43..59647.35 rows=1051518 width=20) (actual time=12.301..1040.280 rows=840733 loops=5)
+                                                  Heap Fetches: 35501
+                                                  Buffers: shared hit=560042 read=20983
+                                                  I/O Timings: shared read=1111.176
+                                            ->  Parallel Hash  (cost=236933.12..236933.12 rows=185206 width=51) (actual time=1499.040..1499.056 rows=150775 loops=5)
+                                                  Buckets: 1048576  Batches: 1  Memory Usage: 68800kB
+                                                  Buffers: shared hit=122383 read=52182
+                                                  I/O Timings: shared read=1902.275
+                                                  ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=4224.04..236933.12 rows=185206 width=51) (actual time=265.650..1110.120 rows=150775 loops=5)
+                                                        Recheck Cond: (title_type = 'movie'::text)
+                                                        Heap Blocks: exact=36618
+                                                        Buffers: shared hit=122383 read=52182
+                                                        I/O Timings: shared read=1902.275
+                                                        ->  Bitmap Index Scan on idx_title_basics_type_genres_gin  (cost=0.00..4038.83 rows=740825 width=0) (actual time=203.718..203.734 rows=753874 loops=1)
+                                                              Index Cond: (title_type = 'movie'::text)
+                                                              Buffers: shared hit=1 read=123
+                                                              I/O Timings: shared read=38.234
+                                      ->  Index Scan using name_basics_pkey on name_basics nb  (cost=0.56..1.07 rows=1 width=24) (actual time=0.020..0.020 rows=1 loops=1649349)
+                                            Index Cond: (nconst = tp.nconst)
+                                            Buffers: shared hit=8063885 read=182856
+                                            I/O Timings: shared read=22051.403
+                    ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.000 rows=2 loops=1649341)
+                          Cache Key: tb.genres
+                          Cache Mode: binary
+                          Hits: 1648359  Misses: 982  Evictions: 0  Overflows: 0  Memory Usage: 219kB
+                          ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.004..0.004 rows=3 loops=982)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=35 read=24 dirtied=3
+  I/O Timings: shared read=21.140
+Planning Time: 65.795 ms
+Execution Time: 15555.771 ms

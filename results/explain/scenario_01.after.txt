@@ -1,0 +1,70 @@
+===== SCENARIO 01: Average rating of movies by genre =====
+Sort  (cost=281940.14..281940.17 rows=10 width=104) (actual time=8907.907..8948.027 rows=27 loops=1)
+  Sort Key: (avg(tr.average_rating)) DESC
+  Sort Method: quicksort  Memory: 26kB
+  Buffers: shared hit=69029 read=136532 written=3892
+  I/O Timings: shared read=24943.451 write=416.247
+  ->  Finalize GroupAggregate  (cost=281934.64..281939.98 rows=10 width=104) (actual time=8907.699..8947.988 rows=27 loops=1)
+        Group Key: g.genre
+        Buffers: shared hit=69029 read=136532 written=3892
+        I/O Timings: shared read=24943.451 write=416.247
+        ->  Gather Merge  (cost=281934.64..281939.43 rows=40 width=72) (actual time=8907.470..8947.649 rows=132 loops=1)
+              Workers Planned: 4
+              Workers Launched: 4
+              Buffers: shared hit=69029 read=136532 written=3892
+              I/O Timings: shared read=24943.451 write=416.247
+              ->  Sort  (cost=280934.58..280934.60 rows=10 width=72) (actual time=8805.926..8805.934 rows=26 loops=5)
+                    Sort Key: g.genre
+                    Sort Method: quicksort  Memory: 27kB
+                    Buffers: shared hit=69029 read=136532 written=3892
+                    I/O Timings: shared read=24943.451 write=416.247
+                    Worker 0:  Sort Method: quicksort  Memory: 27kB
+                    Worker 1:  Sort Method: quicksort  Memory: 27kB
+                    Worker 2:  Sort Method: quicksort  Memory: 27kB
+                    Worker 3:  Sort Method: quicksort  Memory: 27kB
+                    ->  Partial HashAggregate  (cost=280934.29..280934.41 rows=10 width=72) (actual time=8805.759..8805.777 rows=26 loops=5)
+                          Group Key: g.genre
+                          Batches: 1  Memory Usage: 32kB
+                          Buffers: shared hit=68993 read=136532 written=3892
+                          I/O Timings: shared read=24943.451 write=416.247
+                          Worker 0:  Batches: 1  Memory Usage: 32kB
+                          Worker 1:  Batches: 1  Memory Usage: 32kB
+                          Worker 2:  Batches: 1  Memory Usage: 32kB
+                          Worker 3:  Batches: 1  Memory Usage: 32kB
+                          ->  Nested Loop  (cost=239248.20..279070.51 rows=248504 width=38) (actual time=6890.590..8751.008 rows=118357 loops=5)
+                                Buffers: shared hit=68993 read=136532 written=3892
+                                I/O Timings: shared read=24943.451 write=416.247
+                                ->  Parallel Hash Join  (cost=239248.19..275568.38 rows=24850 width=47) (actual time=6890.573..8659.886 rows=69766 loops=5)
+                                      Hash Cond: (tr.tconst = tb.tconst)
+                                      Buffers: shared hit=68993 read=136532 written=3892
+                                      I/O Timings: shared read=24943.451 write=416.247
+                                      ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..35203.20 rows=425520 width=16) (actual time=0.224..1494.175 rows=340413 loops=5)
+                                            Buffers: shared read=30948
+                                            I/O Timings: shared read=7113.089
+                                      ->  Parallel Hash  (cost=236933.12..236933.12 rows=185206 width=51) (actual time=6867.224..6867.226 rows=150775 loops=5)
+                                            Buckets: 1048576  Batches: 1  Memory Usage: 68768kB
+                                            Buffers: shared hit=68981 read=105584 written=3892
+                                            I/O Timings: shared read=17830.362 write=416.247
+                                            ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=4224.04..236933.12 rows=185206 width=51) (actual time=659.714..6046.800 rows=150775 loops=5)
+                                                  Recheck Cond: (title_type = 'movie'::text)
+                                                  Heap Blocks: exact=34108
+                                                  Buffers: shared hit=68981 read=105584 written=3892
+                                                  I/O Timings: shared read=17830.362 write=416.247
+                                                  ->  Bitmap Index Scan on idx_title_basics_type_genres_gin  (cost=0.00..4038.83 rows=740825 width=0) (actual time=588.927..588.927 rows=753874 loops=1)
+                                                        Index Cond: (title_type = 'movie'::text)
+                                                        Buffers: shared hit=124
+                                ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.001..0.001 rows=2 loops=348832)
+                                      Cache Key: tb.genres
+                                      Cache Mode: binary
+                                      Hits: 61869  Misses: 915  Evictions: 0  Overflows: 0  Memory Usage: 204kB
+                                      Worker 0:  Hits: 73472  Misses: 907  Evictions: 0  Overflows: 0  Memory Usage: 202kB
+                                      Worker 1:  Hits: 75659  Misses: 926  Evictions: 0  Overflows: 0  Memory Usage: 207kB
+                                      Worker 2:  Hits: 60092  Misses: 910  Evictions: 0  Overflows: 0  Memory Usage: 203kB
+                                      Worker 3:  Hits: 73140  Misses: 942  Evictions: 0  Overflows: 0  Memory Usage: 210kB
+                                      ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.005..0.005 rows=3 loops=4600)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=179 read=19
+  I/O Timings: shared read=16.427
+Planning Time: 23.851 ms
+Execution Time: 8953.258 ms

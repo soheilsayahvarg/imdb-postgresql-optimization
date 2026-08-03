@@ -1,0 +1,77 @@
+===== SCENARIO 03: Top 20 directors by number of movies, with their average rating =====
+Limit  (cost=1557816.44..1557816.49 rows=20 width=96) (actual time=101344.841..101366.475 rows=20 loops=1)
+  Buffers: shared hit=1212023 read=576826
+  I/O Timings: shared read=92881.500
+  ->  Sort  (cost=1557816.44..1576337.06 rows=7408250 width=96) (actual time=101344.838..101366.469 rows=20 loops=1)
+        Sort Key: (count(*)) DESC, (avg(tr.average_rating)) DESC NULLS LAST
+        Sort Method: top-N heapsort  Memory: 28kB
+        Buffers: shared hit=1212023 read=576826
+        I/O Timings: shared read=92881.500
+        ->  HashAggregate  (cost=1148277.15..1360685.57 rows=7408250 width=96) (actual time=100968.712..101274.582 rows=286901 loops=1)
+              Group Key: nb.nconst
+              Planned Partitions: 32  Batches: 1  Memory Usage: 126993kB
+              Buffers: shared hit=1212020 read=576826
+              I/O Timings: shared read=92881.500
+              ->  Nested Loop  (cost=431273.98..833137.14 rows=7408250 width=30) (actual time=5668.736..98624.288 rows=756951 loops=1)
+                    Buffers: shared hit=1212020 read=576826
+                    I/O Timings: shared read=92881.500
+                    ->  Nested Loop  (cost=431273.41..647900.35 rows=7408250 width=38) (actual time=5666.605..9834.967 rows=756999 loops=1)
+                          Buffers: shared hit=25506 read=328651
+                          I/O Timings: shared read=13366.412
+                          ->  Gather  (cost=431273.40..542216.66 rows=740825 width=48) (actual time=5666.580..6334.605 rows=753874 loops=1)
+                                Workers Planned: 4
+                                Workers Launched: 4
+                                Buffers: shared hit=25506 read=328651
+                                I/O Timings: shared read=13366.412
+                                ->  Parallel Hash Right Join  (cost=430273.40..467134.16 rows=185206 width=48) (actual time=5660.014..6079.621 rows=150775 loops=5)
+                                      Hash Cond: (tr.tconst = tc.tconst)
+                                      Buffers: shared hit=25506 read=328651
+                                      I/O Timings: shared read=13366.412
+                                      ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..35203.20 rows=425520 width=16) (actual time=0.033..97.902 rows=340413 loops=5)
+                                            Buffers: shared hit=12 read=30936
+                                            I/O Timings: shared read=210.211
+                                      ->  Parallel Hash  (cost=427958.33..427958.33 rows=185206 width=52) (actual time=5658.636..5658.643 rows=150775 loops=5)
+                                            Buckets: 1048576  Batches: 1  Memory Usage: 66080kB
+                                            Buffers: shared hit=25350 read=297715
+                                            I/O Timings: shared read=13156.201
+                                            ->  Parallel Hash Join  (cost=239248.19..427958.33 rows=185206 width=52) (actual time=1338.582..5367.858 rows=150775 loops=5)
+                                                  Hash Cond: (tc.tconst = tb.tconst)
+                                                  Buffers: shared hit=25350 read=297715
+                                                  I/O Timings: shared read=13156.201
+                                                  ->  Parallel Seq Scan on title_crew tc  (cost=0.00..180349.61 rows=3184961 width=52) (actual time=0.546..2416.193 rows=2537886 loops=5)
+                                                        Buffers: shared hit=1 read=148499
+                                                        I/O Timings: shared read=10189.762
+                                                  ->  Parallel Hash  (cost=236933.12..236933.12 rows=185206 width=10) (actual time=1336.518..1336.520 rows=150775 loops=5)
+                                                        Buckets: 1048576  Batches: 1  Memory Usage: 43616kB
+                                                        Buffers: shared hit=25349 read=149216
+                                                        I/O Timings: shared read=2966.439
+                                                        ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=4224.04..236933.12 rows=185206 width=10) (actual time=193.392..1164.232 rows=150775 loops=5)
+                                                              Recheck Cond: (title_type = 'movie'::text)
+                                                              Heap Blocks: exact=37232
+                                                              Buffers: shared hit=25349 read=149216
+                                                              I/O Timings: shared read=2966.439
+                                                              ->  Bitmap Index Scan on idx_title_basics_type_genres_gin  (cost=0.00..4038.83 rows=740825 width=0) (actual time=128.673..128.674 rows=753874 loops=1)
+                                                                    Index Cond: (title_type = 'movie'::text)
+                                                                    Buffers: shared hit=3 read=121
+                                                                    I/O Timings: shared read=4.597
+                          ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.003..0.004 rows=1 loops=753874)
+                                Cache Key: tc.directors
+                                Cache Mode: binary
+                                Hits: 477493  Misses: 276381  Evictions: 0  Overflows: 0  Memory Usage: 42881kB
+                                ->  Function Scan on unnest d  (cost=0.00..0.10 rows=10 width=32) (actual time=0.003..0.004 rows=1 loops=276381)
+                    ->  Memoize  (cost=0.57..2.79 rows=1 width=24) (actual time=0.117..0.117 rows=1 loops=756999)
+                          Cache Key: d.nconst
+                          Cache Mode: logical
+                          Hits: 470052  Misses: 286947  Evictions: 0  Overflows: 0  Memory Usage: 36802kB
+                          Buffers: shared hit=1186514 read=248175
+                          I/O Timings: shared read=79515.088
+                          ->  Index Scan using name_basics_pkey on name_basics nb  (cost=0.56..2.78 rows=1 width=24) (actual time=0.300..0.300 rows=1 loops=286947)
+                                Index Cond: (nconst = d.nconst)
+                                Buffers: shared hit=1186514 read=248175
+                                I/O Timings: shared read=79515.088
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=95 read=23 dirtied=4
+  I/O Timings: shared read=5.605
+Planning Time: 7.538 ms
+Execution Time: 101420.775 ms

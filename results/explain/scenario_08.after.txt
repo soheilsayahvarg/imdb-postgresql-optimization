@@ -1,0 +1,48 @@
+===== SCENARIO 08: Top 5 longest movies per genre =====
+Subquery Scan on ranked  (cost=244736.32..635790.79 rows=2611650 width=67) (actual time=1079.154..1927.038 rows=135 loops=1)
+  Buffers: shared hit=142987 read=410
+  I/O Timings: shared read=7.167
+  ->  WindowAgg  (cost=244736.32..609674.29 rows=2611650 width=75) (actual time=1079.152..1926.987 rows=135 loops=1)
+        Run Condition: (row_number() OVER (?) <= 5)
+        Buffers: shared hit=142987 read=410
+        I/O Timings: shared read=7.167
+        ->  Gather Merge  (cost=244736.32..557441.29 rows=2611650 width=67) (actual time=1079.036..1851.789 rows=741562 loops=1)
+              Workers Planned: 4
+              Workers Launched: 4
+              Buffers: shared hit=142987 read=410
+              I/O Timings: shared read=7.167
+              ->  Sort  (cost=243736.26..245368.54 rows=652912 width=67) (actual time=1027.431..1076.967 rows=148312 loops=5)
+                    Sort Key: g.genre, tb.runtime_minutes DESC, tb.tconst
+                    Sort Method: quicksort  Memory: 17334kB
+                    Buffers: shared hit=142987 read=410
+                    I/O Timings: shared read=7.167
+                    Worker 0:  Sort Method: quicksort  Memory: 11753kB
+                    Worker 1:  Sort Method: quicksort  Memory: 16823kB
+                    Worker 2:  Sort Method: quicksort  Memory: 16784kB
+                    Worker 3:  Sort Method: quicksort  Memory: 15565kB
+                    ->  Nested Loop  (cost=1616.85..180676.29 rows=652912 width=67) (actual time=146.206..477.905 rows=148312 loops=5)
+                          Buffers: shared hit=142920 read=409
+                          I/O Timings: shared read=7.015
+                          ->  Parallel Bitmap Heap Scan on title_basics tb  (cost=1616.84..171613.53 rows=65291 width=76) (actual time=146.106..382.596 rows=95056 loops=5)
+                                Recheck Cond: ((title_type = 'movie'::text) AND (runtime_minutes IS NOT NULL))
+                                Heap Blocks: exact=31886
+                                Buffers: shared hit=142920 read=409
+                                I/O Timings: shared read=7.015
+                                ->  Bitmap Index Scan on idx_title_basics_movie_runtime  (cost=0.00..1551.55 rows=261165 width=0) (actual time=91.626..91.626 rows=475280 loops=1)
+                                      Buffers: shared read=409
+                                      I/O Timings: shared read=7.015
+                          ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.000 rows=2 loops=475280)
+                                Cache Key: tb.genres
+                                Cache Mode: binary
+                                Hits: 103689  Misses: 1024  Evictions: 0  Overflows: 0  Memory Usage: 229kB
+                                Worker 0:  Hits: 81252  Misses: 932  Evictions: 0  Overflows: 0  Memory Usage: 208kB
+                                Worker 1:  Hits: 98382  Misses: 1005  Evictions: 0  Overflows: 0  Memory Usage: 225kB
+                                Worker 2:  Hits: 98756  Misses: 975  Evictions: 0  Overflows: 0  Memory Usage: 218kB
+                                Worker 3:  Hits: 88312  Misses: 953  Evictions: 0  Overflows: 0  Memory Usage: 213kB
+                                ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.003..0.003 rows=3 loops=4889)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=5 read=3 dirtied=1
+  I/O Timings: shared read=1.494
+Planning Time: 5.891 ms
+Execution Time: 1930.801 ms

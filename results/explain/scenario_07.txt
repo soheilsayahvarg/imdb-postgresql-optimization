@@ -1,0 +1,70 @@
+===== SCENARIO 07: Most common pair of genres in movies =====
+Limit  (cost=635024.28..635024.33 rows=20 width=72) (actual time=3820.456..3850.795 rows=20 loops=1)
+  Buffers: shared hit=114906 read=115524
+  I/O Timings: shared read=10769.982
+  ->  Sort  (cost=635024.28..635024.53 rows=100 width=72) (actual time=3820.452..3850.788 rows=20 loops=1)
+        Sort Key: (count(*)) DESC
+        Sort Method: top-N heapsort  Memory: 26kB
+        Buffers: shared hit=114906 read=115524
+        I/O Timings: shared read=10769.982
+        ->  Finalize GroupAggregate  (cost=634969.73..635021.62 rows=100 width=72) (actual time=3818.972..3850.257 rows=310 loops=1)
+              Group Key: g1.genre, g2.genre
+              Buffers: shared hit=114906 read=115524
+              I/O Timings: shared read=10769.982
+              ->  Gather Merge  (cost=634969.73..635017.62 rows=400 width=72) (actual time=3818.954..3849.912 rows=1391 loops=1)
+                    Workers Planned: 4
+                    Workers Launched: 4
+                    Buffers: shared hit=114906 read=115524
+                    I/O Timings: shared read=10769.982
+                    ->  Sort  (cost=633969.67..633969.92 rows=100 width=72) (actual time=3804.022..3804.045 rows=278 loops=5)
+                          Sort Key: g1.genre, g2.genre
+                          Sort Method: quicksort  Memory: 38kB
+                          Buffers: shared hit=114906 read=115524
+                          I/O Timings: shared read=10769.982
+                          Worker 0:  Sort Method: quicksort  Memory: 38kB
+                          Worker 1:  Sort Method: quicksort  Memory: 38kB
+                          Worker 2:  Sort Method: quicksort  Memory: 38kB
+                          Worker 3:  Sort Method: quicksort  Memory: 38kB
+                          ->  Partial HashAggregate  (cost=633965.35..633966.35 rows=100 width=72) (actual time=3803.485..3803.536 rows=278 loops=5)
+                                Group Key: g1.genre, g2.genre
+                                Batches: 1  Memory Usage: 77kB
+                                Buffers: shared hit=114870 read=115524
+                                I/O Timings: shared read=10769.982
+                                Worker 0:  Batches: 1  Memory Usage: 77kB
+                                Worker 1:  Batches: 1  Memory Usage: 77kB
+                                Worker 2:  Batches: 1  Memory Usage: 77kB
+                                Worker 3:  Batches: 1  Memory Usage: 77kB
+                                ->  Nested Loop  (cost=0.03..588780.10 rows=6024700 width=64) (actual time=0.531..3731.304 rows=94106 loops=5)
+                                      Join Filter: (g1.genre < g2.genre)
+                                      Rows Removed by Join Filter: 301435
+                                      Buffers: shared hit=114870 read=115524
+                                      I/O Timings: shared read=10769.982
+                                      ->  Nested Loop  (cost=0.01..294990.62 rows=1807410 width=73) (actual time=0.379..3460.786 rows=207329 loops=5)
+                                            Buffers: shared hit=114870 read=115524
+                                            I/O Timings: shared read=10769.982
+                                            ->  Parallel Seq Scan on title_basics tb  (cost=0.00..270053.38 rows=180741 width=41) (actual time=0.345..3248.991 rows=150775 loops=5)
+                                                  Filter: (title_type = 'movie'::text)
+                                                  Rows Removed by Filter: 2387111
+                                                  Buffers: shared hit=114870 read=115524
+                                                  I/O Timings: shared read=10769.982
+                                            ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.001..0.001 rows=1 loops=753874)
+                                                  Cache Key: tb.genres
+                                                  Cache Mode: binary
+                                                  Hits: 163385  Misses: 1105  Evictions: 0  Overflows: 0  Memory Usage: 247kB
+                                                  Worker 0:  Hits: 149101  Misses: 1036  Evictions: 0  Overflows: 0  Memory Usage: 232kB
+                                                  Worker 1:  Hits: 149441  Misses: 1067  Evictions: 0  Overflows: 0  Memory Usage: 239kB
+                                                  Worker 2:  Hits: 134310  Misses: 1028  Evictions: 0  Overflows: 0  Memory Usage: 230kB
+                                                  Worker 3:  Hits: 152342  Misses: 1059  Evictions: 0  Overflows: 0  Memory Usage: 237kB
+                                                  ->  Function Scan on unnest g1  (cost=0.00..0.10 rows=10 width=32) (actual time=0.006..0.006 rows=3 loops=5295)
+                                      ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.000..0.001 rows=2 loops=1036647)
+                                            Cache Key: tb.genres
+                                            Cache Mode: binary
+                                            Hits: 225179  Misses: 1104  Evictions: 0  Overflows: 0  Memory Usage: 247kB
+                                            Worker 0:  Hits: 205508  Misses: 1035  Evictions: 0  Overflows: 0  Memory Usage: 231kB
+                                            Worker 1:  Hits: 205121  Misses: 1066  Evictions: 0  Overflows: 0  Memory Usage: 239kB
+                                            Worker 2:  Hits: 186348  Misses: 1027  Evictions: 0  Overflows: 0  Memory Usage: 230kB
+                                            Worker 3:  Hits: 209201  Misses: 1058  Evictions: 0  Overflows: 0  Memory Usage: 237kB
+                                            ->  Function Scan on unnest g2  (cost=0.00..0.10 rows=10 width=32) (actual time=0.001..0.002 rows=3 loops=5290)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning Time: 0.426 ms
+Execution Time: 3852.036 ms

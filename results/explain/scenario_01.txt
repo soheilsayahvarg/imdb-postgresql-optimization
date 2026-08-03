@@ -1,0 +1,67 @@
+===== SCENARIO 01: Average rating of movies by genre =====
+Sort  (cost=314874.98..314875.01 rows=10 width=104) (actual time=4347.848..4379.101 rows=27 loops=1)
+  Sort Key: (avg(tr.average_rating)) DESC
+  Sort Method: quicksort  Memory: 26kB
+  Buffers: shared hit=12087 read=249303
+  I/O Timings: shared read=14903.166
+  ->  Finalize GroupAggregate  (cost=314869.48..314874.82 rows=10 width=104) (actual time=4347.418..4378.968 rows=27 loops=1)
+        Group Key: g.genre
+        Buffers: shared hit=12087 read=249303
+        I/O Timings: shared read=14903.166
+        ->  Gather Merge  (cost=314869.48..314874.27 rows=40 width=72) (actual time=4346.504..4377.962 rows=132 loops=1)
+              Workers Planned: 4
+              Workers Launched: 4
+              Buffers: shared hit=12087 read=249303
+              I/O Timings: shared read=14903.166
+              ->  Sort  (cost=313869.42..313869.44 rows=10 width=72) (actual time=4335.865..4335.887 rows=26 loops=5)
+                    Sort Key: g.genre
+                    Sort Method: quicksort  Memory: 27kB
+                    Buffers: shared hit=12087 read=249303
+                    I/O Timings: shared read=14903.166
+                    Worker 0:  Sort Method: quicksort  Memory: 27kB
+                    Worker 1:  Sort Method: quicksort  Memory: 27kB
+                    Worker 2:  Sort Method: quicksort  Memory: 27kB
+                    Worker 3:  Sort Method: quicksort  Memory: 27kB
+                    ->  Partial HashAggregate  (cost=313869.13..313869.25 rows=10 width=72) (actual time=4335.281..4335.314 rows=26 loops=5)
+                          Group Key: g.genre
+                          Batches: 1  Memory Usage: 32kB
+                          Buffers: shared hit=12051 read=249303
+                          I/O Timings: shared read=14903.166
+                          Worker 0:  Batches: 1  Memory Usage: 32kB
+                          Worker 1:  Batches: 1  Memory Usage: 32kB
+                          Worker 2:  Batches: 1  Memory Usage: 32kB
+                          Worker 3:  Batches: 1  Memory Usage: 32kB
+                          ->  Nested Loop  (cost=272312.65..312051.11 rows=242402 width=38) (actual time=2356.205..4280.776 rows=118357 loops=5)
+                                Buffers: shared hit=12051 read=249303
+                                I/O Timings: shared read=14903.166
+                                ->  Parallel Hash Join  (cost=272312.64..308632.76 rows=24240 width=47) (actual time=2356.150..4191.300 rows=69766 loops=5)
+                                      Hash Cond: (tr.tconst = tb.tconst)
+                                      Buffers: shared hit=12051 read=249303
+                                      I/O Timings: shared read=14903.166
+                                      ->  Parallel Seq Scan on title_ratings tr  (cost=0.00..35203.15 rows=425515 width=16) (actual time=0.611..1577.639 rows=340413 loops=5)
+                                            Buffers: shared hit=32 read=30916
+                                            I/O Timings: shared read=7473.535
+                                      ->  Parallel Hash  (cost=270053.38..270053.38 rows=180741 width=51) (actual time=2352.750..2352.751 rows=150775 loops=5)
+                                            Buckets: 1048576  Batches: 1  Memory Usage: 68832kB
+                                            Buffers: shared hit=12007 read=218387
+                                            I/O Timings: shared read=7429.631
+                                            ->  Parallel Seq Scan on title_basics tb  (cost=0.00..270053.38 rows=180741 width=51) (actual time=0.596..2089.660 rows=150775 loops=5)
+                                                  Filter: (title_type = 'movie'::text)
+                                                  Rows Removed by Filter: 2387111
+                                                  Buffers: shared hit=12007 read=218387
+                                                  I/O Timings: shared read=7429.631
+                                ->  Memoize  (cost=0.01..0.11 rows=10 width=32) (actual time=0.001..0.001 rows=2 loops=348832)
+                                      Cache Key: tb.genres
+                                      Cache Mode: binary
+                                      Hits: 66549  Misses: 905  Evictions: 0  Overflows: 0  Memory Usage: 202kB
+                                      Worker 0:  Hits: 72166  Misses: 918  Evictions: 0  Overflows: 0  Memory Usage: 205kB
+                                      Worker 1:  Hits: 68484  Misses: 924  Evictions: 0  Overflows: 0  Memory Usage: 206kB
+                                      Worker 2:  Hits: 69093  Misses: 922  Evictions: 0  Overflows: 0  Memory Usage: 206kB
+                                      Worker 3:  Hits: 67964  Misses: 907  Evictions: 0  Overflows: 0  Memory Usage: 202kB
+                                      ->  Function Scan on unnest g  (cost=0.00..0.10 rows=10 width=32) (actual time=0.004..0.004 rows=3 loops=4576)
+Settings: work_mem = '64MB', random_page_cost = '1.1', effective_io_concurrency = '200', max_parallel_workers_per_gather = '4', jit = 'off', search_path = 'imdb, public'
+Planning:
+  Buffers: shared hit=137 read=18
+  I/O Timings: shared read=5.149
+Planning Time: 8.385 ms
+Execution Time: 4381.153 ms
