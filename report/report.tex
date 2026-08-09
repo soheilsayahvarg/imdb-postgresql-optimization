@@ -1,0 +1,158 @@
+% =============================================================================
+%  Final report -- PostgreSQL optimisation project on the IMDb dataset.
+%
+%  Compile (from this directory):
+%      xelatex -interaction=nonstopmode report.tex
+%      xelatex -interaction=nonstopmode report.tex   (second pass: ToC/refs)
+%
+%  Requires: TeX Live / MiKTeX with xepersian, a Persian-capable system font.
+%  B Nazanin itself is not installed on this machine (checked the Windows font
+%  registry directly -- it is a commercial font not bundled with modern Windows
+%  or TeX Live). Traditional Arabic is used instead: a classic Naskh-style
+%  system font with a genuine bold weight, the closest available match to
+%  B Nazanin's traditional look. If a real B Nazanin/Vazirmatn .ttf is ever
+%  installed on the machine that compiles this, just change \settextfont below.
+%  Arial is used for Latin text (plain, simple, no decorative serifs). The
+%  Scale= factors below correct a real size mismatch: at the same nominal
+%  point size, Traditional Arabic renders visibly smaller than most Latin
+%  fonts, so Persian is scaled up and Latin scaled down to balance the two.
+% =============================================================================
+\documentclass[a4paper,12pt]{article}
+
+% The bidi package (loaded by xepersian) requires several common packages --
+% geometry, xcolor, array, longtable, listings, hyperref, among others -- to be
+% loaded BEFORE it, or it raises a hard "Oops! you have loaded package X after
+% bidi package" error. xepersian itself must therefore be the LAST \usepackage.
+\usepackage{geometry}
+\geometry{a4paper, margin=2.7cm}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{listings}
+\usepackage[xetex,unicode,colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
+
+\usepackage{xepersian}
+\settextfont[Scale=1.15]{Traditional Arabic}
+\setlatintextfont[Scale=0.85]{Arial}
+\setdigitfont[Scale=1.15]{Traditional Arabic}
+
+% ---------------------------------------------------------------------------
+%  Code listings: English source stays left-to-right even inside this
+%  right-to-left document. Every \lstlisting below is wrapped in
+%  \begin{latin}...\end{latin}, which is xepersian's own mechanism for
+%  embedding Latin-script verbatim material (see xepersian.sty, \latin/\endlatin).
+% ---------------------------------------------------------------------------
+\lstdefinestyle{code}{
+  basicstyle=\footnotesize\ttfamily,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  commentstyle=\color{gray}\itshape,
+  keywordstyle=\color{blue!60!black}\bfseries,
+  stringstyle=\color{orange!70!black},
+  showstringspaces=false,
+  tabsize=2,
+  morekeywords={CREATE,INDEX,IF,NOT,EXISTS,ON,USING,GIN,WHERE,AND,SELECT,FROM,
+    JOIN,LEFT,CROSS,LATERAL,GROUP,BY,ORDER,LIMIT,HAVING,WITH,PARTITION,OVER,
+    RETURNS,LANGUAGE,plpgsql,AS,DECLARE,BEGIN,END,LOOP,FOR,UPDATE,SKIP,LOCKED,
+    def,import,from,return,if,else,while,class,None,True,False},
+}
+\lstset{style=code}
+
+% Long file/path references (e.g. scripts/compare_timings.py) need to stay
+% left-to-right AND break gracefully at / and _ -- plain \lr{} has no break
+% points and causes large overfull hboxes. \url (from the url package, loaded
+% by hyperref) already breaks at exactly those characters, so \Rl reuses it.
+\newcommand{\Rl}[1]{\url{#1}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+% ---------------------------------------------------------------------------
+%  Title page -- fill in the bracketed placeholders before submitting.
+% ---------------------------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+{\Large دانشگاه صنعتی شریف}\\[2cm]
+
+{\huge\bfseries بهینه‌سازی پایگاه‌داده \lr{PostgreSQL} برای مجموعه‌داده \lr{IMDb}}\\[0.5cm]
+{\Large صف پیام، فشرده‌سازی \lr{TOAST} و ایندکس‌گذاری هدفمند}\\[2.5cm]
+
+{\large درس: طراحی پایگاه داده -- نیم‌سال دوم سال تحصیلی 1404--1405}\\[0.3cm]
+{\large استاد درس: دکتر رمضانی}\\[2cm]
+
+{\large نگارش:}\\[0.4cm]
+{\large سهیل سیاح ورگ -- \lr{402111237}}\\[0.2cm]
+{\large امیرحسین موسوی فرد -- \lr{402111515}}\\[0.2cm]
+{\large رضا اسلامی ابیانه -- \lr{402105619}}\\[1cm]
+
+\vfill
+\end{titlepage}
+
+\input{sections/00-abstract.tex}
+
+\tableofcontents
+\newpage
+
+\input{sections/01-intro.tex}
+\input{sections/02-architecture.tex}
+\input{sections/03-queue.tex}
+\input{sections/04-scenarios.tex}
+\input{sections/05-indexing.tex}
+\input{sections/06-theory.tex}
+\input{sections/07-conclusion.tex}
+
+\begin{thebibliography}{9}
+
+\bibitem{pgdocs}
+\lr{PostgreSQL Global Development Group}, «\lr{PostgreSQL 16 Documentation}»,
+\lr{\url{https://www.postgresql.org/docs/16/index.html}}
+
+\bibitem{pgtoast}
+\lr{PostgreSQL Global Development Group}, «\lr{TOAST (The Oversized-Attribute Storage Technique)}»,
+\lr{\url{https://www.postgresql.org/docs/16/storage-toast.html}}
+
+\bibitem{pggin}
+\lr{PostgreSQL Global Development Group}, «\lr{GIN Indexes}»,
+\lr{\url{https://www.postgresql.org/docs/16/gin.html}}
+
+\bibitem{pglocking}
+\lr{PostgreSQL Global Development Group}, «\lr{SELECT ... FOR UPDATE SKIP LOCKED}»,
+\lr{\url{https://www.postgresql.org/docs/16/sql-select.html\#SQL-FOR-UPDATE-SKIP-LOCKED}}
+
+\bibitem{pgresource}
+\lr{PostgreSQL Global Development Group}, «\lr{Resource Consumption (\lr{shared\_buffers}, \lr{work\_mem}, ...)}»,
+\lr{\url{https://www.postgresql.org/docs/16/runtime-config-resource.html}}
+
+\bibitem{pgconfig}
+\lr{postgresqlco.nf}, «\lr{PostgreSQL Configuration Documentation}»,
+\lr{\url{https://postgresqlco.nf/}}
+
+\bibitem{pgtune}
+\lr{PgTune}, «\lr{PostgreSQL Configuration Calculator}»,
+\lr{\url{https://pgtune.leopard.in.ua/}}
+
+\bibitem{pgeverything}
+\lr{Daniel Olshansky}, «\lr{Postgres For Everything}»,
+\lr{\url{https://github.com/olshansk/postgres_for_everything}}
+
+\bibitem{imdb}
+\lr{IMDb}, «\lr{IMDb Non-Commercial Datasets}»,
+\lr{\url{https://datasets.imdbws.com/}}
+
+\bibitem{imdbdocs}
+\lr{IMDb}, «\lr{Non-Commercial Datasets -- Documentation}»,
+\lr{\url{https://developer.imdb.com/non-commercial-datasets/}}
+
+\end{thebibliography}
+
+\end{document}

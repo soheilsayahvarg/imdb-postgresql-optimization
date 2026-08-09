@@ -1,0 +1,169 @@
+\section{صف پیام و بارگذاری جریانی}
+\label{sec:queue}
+
+\subsection{جدول صف پیام}
+
+هسته‌ی خط لوله‌ی بارگذاری، جدولی به اسم \lr{message\_queue} است که مثل یک صف کار عمل می‌کند:
+
+\begin{latin}
+\begin{lstlisting}[language=SQL, caption={message\_queue table structure}]
+CREATE TABLE imdb.message_queue (
+    id           BIGINT      GENERATED ALWAYS AS IDENTITY,
+    attempts     INTEGER     NOT NULL DEFAULT 0,
+    queue_name   TEXT        NOT NULL,
+    status       TEXT        NOT NULL DEFAULT 'pending',
+    payload      JSONB       NOT NULL,
+    last_error   TEXT,
+    locked_until TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT message_queue_pkey PRIMARY KEY (id),
+    CONSTRAINT message_queue_status_chk
+        CHECK (status IN ('pending', 'processing', 'done', 'failed'))
+);
+
+-- Only claimable rows need to be found fast; 'done' rows drop out entirely.
+CREATE INDEX message_queue_ready_idx
+    ON imdb.message_queue (queue_name, id) WHERE status = 'pending';
+
+-- Used by the reaper that returns expired leases to 'pending'.
+CREATE INDEX message_queue_stuck_idx
+    ON imdb.message_queue (locked_until) WHERE status = 'processing';
+\end{lstlisting}
+\end{latin}
+
+هر پیام یکی از چهار وضعیت را دارد: \lr{pending}، \lr{processing}، \lr{done} یا \lr{failed}. دو ایندکس جزئی روی این جدول گذاشته‌ایم: \lr{message\_queue\_ready\_idx} فقط سطرهای \lr{pending} را در بر می‌گیرد (پس اندازه‌اش با تعداد کارهای باقی‌مانده رشد می‌کند، نه با کل تاریخچه‌ی صف)، و \lr{message\_queue\_stuck\_idx} برای پیدا کردن پیام‌هایی که مهلتشان تمام شده استفاده می‌شود. جدول با \lr{fillfactor = 80} ساخته شده چون هر پیام حداقل دو بار آپدیت می‌شود (یک‌بار وقتی برداشته می‌شود، یک‌بار وقتی تأیید می‌شود). \lr{autovacuum} هم روی این جدول با آستانه‌ی مطلق تنظیم شده، چون یک صف خیلی سریع‌تر از آستانه‌ی پیش‌فرض \lr{20\%} سطر مرده تولید می‌کند.
+
+\subsection{توابع \lr{PL/pgSQL} صف}
+
+پنج تابع اصلی روی این جدول نوشته‌ایم:
+
+\begin{itemize}
+\item \lr{enqueue} و \lr{enqueue\_many}: اضافه‌کردن یک یا چند پیام؛
+\item \lr{dequeue}: برداشتن یک دسته از پیام‌های \lr{pending} با \lr{SELECT ... FOR UPDATE SKIP LOCKED} \cite{pglocking} و علامت‌زدن آن‌ها به \lr{processing} با یک مهلت؛
+\item \lr{ack}: علامت‌زدن یک پیام به \lr{done} بعد از پردازش موفق؛
+\item \lr{nack}: زیاد کردن شمارنده‌ی تلاش؛ اگر هنوز به سقف نرسیده، پیام دوباره \lr{pending} می‌شود، وگرنه \lr{failed} می‌شود؛
+\item \lr{reap\_expired}: پیام‌هایی که در \lr{processing} گیر کرده‌اند (یعنی مصرف‌کننده‌شان قبل از تأیید یا رد کردن از کار افتاده) را دوباره \lr{pending} می‌کند.
+\end{itemize}
+
+\begin{latin}
+\begin{lstlisting}[language=SQL, caption={Core of dequeue(): lock-free batch claim}]
+WITH claimed AS (
+    SELECT id
+    FROM   imdb.message_queue
+    WHERE  queue_name = p_queue_name AND status = 'pending'
+    ORDER  BY id
+    FOR UPDATE SKIP LOCKED
+    LIMIT  p_batch_size
+)
+UPDATE imdb.message_queue mq
+SET    status = 'processing',
+       locked_until = now() + p_visibility_timeout,
+       attempts = attempts + 1,
+       updated_at = now()
+FROM   claimed
+WHERE  mq.id = claimed.id
+RETURNING mq.id, mq.payload;
+\end{lstlisting}
+\end{latin}
+
+نکته‌ی مهم \lr{SKIP LOCKED} این است: اگر چند مصرف‌کننده هم‌زمان این کوئری را اجرا کنند، هرکدام سطرهایی که مصرف‌کننده‌ی دیگر قبلاً قفل کرده را رد می‌کند و می‌رود سراغ سطر بعدی که آزاد است. یعنی به‌جای این‌که منتظر بمانند، هرکدام یک دسته‌ی جدا از صف برمی‌دارند -- دقیقاً همان چیزی که الگوی \lr{Competing Consumers} لازم دارد (توضیح کامل‌تر در بخش \ref{sec:theory}).
+
+سه تابع باقی‌مانده -- \lr{enqueue}، \lr{ack} و \lr{nack} -- ساده‌ترند: هرکدام یک \lr{INSERT}/\lr{UPDATE} تک‌سطری روی \lr{message\_queue} هستند. هسته‌ی هرکدام (بدون بخش‌های اعتبارسنجی ورودی) این‌طور است:
+
+\begin{latin}
+\begin{lstlisting}[language=SQL, caption={Core of enqueue(), ack() and nack()}]
+-- enqueue(): append one message
+INSERT INTO imdb.message_queue (queue_name, payload)
+VALUES (p_queue_name, p_payload)
+RETURNING id INTO v_id;
+
+-- ack(): processing -> done, only if this worker's lease is still valid
+UPDATE imdb.message_queue mq
+SET    status = 'done', locked_until = NULL, updated_at = now()
+WHERE  mq.id = p_message_id AND mq.status = 'processing';
+GET DIAGNOSTICS v_rows = ROW_COUNT;
+RETURN v_rows = 1;   -- FALSE means the lease had already expired
+
+-- nack(): count the failure; retry while under the cap, else park as 'failed'
+UPDATE imdb.message_queue mq
+SET    attempts     = mq.attempts + 1,
+       last_error   = left(coalesce(p_error_message, ''), 2000),
+       status       = CASE WHEN mq.attempts + 1 >= p_max_attempts
+                           THEN 'failed' ELSE 'pending' END,
+       locked_until = NULL, updated_at = now()
+WHERE  mq.id = p_message_id AND mq.status = 'processing'
+RETURNING mq.status INTO v_status;
+\end{lstlisting}
+\end{latin}
+
+\lr{ack} مقدار \lr{BOOLEAN} برمی‌گرداند (نه \lr{VOID} مثل اسکلت اولیه‌ی سند پروژه): \lr{FALSE} یعنی مهلت پیام قبل از تأیید تمام شده و احتمالاً یک مصرف‌کننده‌ی دیگر همان پیام را دوباره پردازش کرده -- بی‌ضرر است چون درج‌ها \lr{ON CONFLICT DO NOTHING} دارند. کد کامل و تست‌شده‌ی هر پنج تابع (به‌همراه \lr{reap\_expired}، \lr{queue\_stats} و \lr{purge\_done}) در \Rl{sql/01_queue_functions.sql} است.
+
+\subsection{بسته‌بندی دسته‌ای و آستانه‌ی \lr{TOAST}}
+
+فشرده‌سازی \lr{TOAST} در \lr{PostgreSQL} \cite{pgtoast} بر اساس هر سطر (تاپل) فعال می‌شود، نه هر ستون. یعنی فقط وقتی کل اندازه‌ی یک سطر از آستانه‌ی \lr{TOAST\_TUPLE\_THRESHOLD} (حدود \lr{2} کیلوبایت) بیشتر شود، \lr{PostgreSQL} شروع به فشرده‌کردن و بیرون‌بردن ستون‌های بزرگ می‌کند. اگر هر پیام فقط یک سطر باشد (حدود \lr{200} بایت)، این آستانه هیچ‌وقت رد نمی‌شود و \lr{JSONB} بدون فشرده‌سازی ذخیره می‌شود -- برای \lr{190} میلیون پیام، این یعنی چند ده گیگابایت فضای اضافه.
+
+راه‌حل این است که \lr{1000} سطر را در یک پیام بسته‌بندی کنیم:
+
+\begin{latin}
+\begin{lstlisting}[language=Python, caption={Two message payload shapes}]
+# single : {"table": "title_basics", "data": {...}}          <- one row
+# batch  : {"table": "title_basics", "rows": [{...}, ...]}   <- 1000 rows
+\end{lstlisting}
+\end{latin}
+
+بار یک دسته‌ی \lr{1000}تایی چند صد کیلوبایت است، یعنی از آستانه رد می‌شود، پس با \lr{lz4} فشرده و به \lr{TOAST} منتقل می‌شود. چون کلیدهای \lr{JSON} در همه‌ی سطرها تکرار می‌شوند، فشرده‌سازی خیلی خوب کار می‌کند. سربار هدر هر سطر (\lr{24} بایت) هم به همین نسبت \lr{1000} برابر کم می‌شود. این ادعا را روی داده‌ی واقعی این پروژه هم اندازه‌گیری کردیم. با \lr{pg\_column\_size} (اندازه‌ی واقعی روی دیسک) در برابر طول متن خام \lr{JSON} هر پیام، روی \lr{1{,}079} پیام باقی‌مانده در \lr{message\_queue} حساب کردیم: \lr{113} مگابایت خام به فقط \lr{20} مگابایت رسید. یعنی نسبت فشرده‌سازی واقعی \lr{5.72} برابر. خود جدول \lr{message\_queue} هم همین را نشان می‌دهد: بخش اصلی سطر (\lr{heap}) فقط \lr{424} کیلوبایت است، ولی بخش \lr{TOAST} آن \lr{48} مگابایت -- دقیقاً همان چیزی که از طراحی بسته‌بندی دسته‌ای انتظار داشتیم.
+
+\subsection{تولیدکننده (\lr{Producer})}
+
+تولیدکننده (\Rl{scripts/producer.py}) فایل‌های فشرده‌ی \lr{.tsv.gz} را جریانی می‌خواند، یعنی هیچ‌وقت نسخه‌ی استخراج‌شده‌ی کامل را روی دیسک نمی‌نویسد. سطرها را با تابع مناسب هر ستون تبدیل می‌کند (عدد کوچک، بولی، آرایه، \lr{JSON})، در دسته‌های \lr{1000}تایی بسته‌بندی و با \Rl{enqueue_many} در صف می‌گذارد. یک مکانیزم فشار-پس (\lr{backpressure}) هم با پرس‌وجوی دوره‌ای \Rl{queue_stats} جلوی رشد زیاد صف را می‌گیرد: اگر تعداد پیام‌های \lr{pending} از یک حد بیشتر شود، تولیدکننده کمی کندتر می‌شود.
+
+بخش اصلی کد -- ساخت بار پیام و ارسال آن به تابع صف -- این‌طور است:
+
+\begin{latin}
+\begin{lstlisting}[language=Python, caption={scripts/producer.py -- payload shaping and enqueue call}]
+def make_payloads(table, rows, shape):
+    dumps = lambda o: json.dumps(o, separators=(",", ":"), ensure_ascii=False)
+    if shape == "single":
+        return [dumps({"table": table, "data": r}) for r in rows]
+    return [dumps({"table": table, "rows": rows})]     # 1000-row batch shape
+
+def emit(self, payloads):
+    with self.data.cursor() as cur:
+        if self.args.enqueue_mode == "single" or len(payloads) == 1:
+            for p in payloads:
+                cur.execute("SELECT imdb.enqueue(%s, %s::jsonb)", (self.queue, p))
+        else:
+            cur.execute(
+                "SELECT count(*) FROM imdb.enqueue_many"
+                "(%s, ARRAY(SELECT jsonb_array_elements(%s::jsonb)))",
+                (self.queue, "[" + ",".join(payloads) + "]"))
+    self.messages_since_commit += len(payloads)
+\end{lstlisting}
+\end{latin}
+
+\subsection{مصرف‌کننده (\lr{Consumer})}
+
+مصرف‌کننده (\Rl{scripts/consumer.py}) با \lr{dequeue} دسته‌ها را برمی‌دارد، هر دو شکل بار پیام را می‌فهمد، و با \lr{execute\_values} درج انبوه می‌کند. اگر یک سطر خراب درون یک دسته باشد، برای این‌که کل دسته خراب نشود، هر دسته درون یک \lr{SAVEPOINT} اجرا می‌شود. اگر درج انبوه شکست بخورد، مصرف‌کننده به یک مسیر سطر-به-سطر برمی‌گردد تا فقط همان سطر خراب را در جدول \lr{dead\_letter} بگذارد و بقیه‌ی دسته درست درج شود. یک نخ جدا هم به‌طور دوره‌ای \lr{reap\_expired} را صدا می‌زند تا پیام‌هایی که مصرف‌کننده‌شان از کار افتاده، دوباره به صف برگردند -- این همان چیزی است که تضمین \textbf{حداقل یک‌بار تحویل} را می‌سازد (توضیح کامل در بخش \ref{sec:theory}).
+
+حلقه‌ی اصلی هر کارگر (ساده‌شده؛ منطق اتصال‌مجدد و خاموش‌شدن امن حذف شده) این‌طور است:
+
+\begin{latin}
+\begin{lstlisting}[language=Python, caption={scripts/consumer.py -- main worker loop (simplified)}]
+while not SHUTDOWN.is_set():
+    messages = dequeue(lease, args.queue, args.batch, args.visibility)
+    if not messages:
+        wait_shutdown(args.poll)
+        continue
+
+    for msg_id, payload in messages:
+        table, rows = split_payload(payload)
+        res = ingest_message(work, table, rows)   # execute_values inside a SAVEPOINT
+        if res["action"] == "ack":
+            ack(lease, msg_id)
+        else:
+            nack(lease, msg_id, res["error"] or "", args.max_attempts)
+\end{lstlisting}
+\end{latin}
+
+اگر \lr{execute\_values} روی کل دسته خطا بدهد (نه یک خطای موقتی مثل \lr{deadlock})، \lr{ingest\_message} به همان دسته با \lr{SAVEPOINT} جدا برای هر سطر برمی‌گردد؛ فقط سطرهای واقعاً خراب به \lr{dead\_letter} می‌روند و بقیه با موفقیت درج می‌شوند.
