@@ -1,0 +1,28 @@
+# Raw IMDb dumps: ~1.8 GB compressed, re-downloadable from datasets.imdbws.com
+data/
+
+# Local credentials (resources/.env.example is the tracked template)
+resources/.env
+
+# LaTeX build artefacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.xdv
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Course-provided material (not this student's own work; not for redistribution)
+document.pdf
+project2-resources.zip
+All projects/
+
+# Build artifact -- just a repackaging of files already tracked here
+deliverable/
