@@ -1,13 +1,13 @@
 # IMDb PostgreSQL Optimization
 
-A PostgreSQL 16 project built around the ~190M-row [IMDb non-commercial dataset](https://datasets.imdbws.com/). It streams the raw `.tsv.gz` dumps through a durable, `SKIP LOCKED`-based message queue into the database, then benchmarks and indexes eight analytical query scenarios with real `EXPLAIN (ANALYZE, BUFFERS)` measurements.
+A PostgreSQL 16 project built around the ~190M-row [IMDb non-commercial dataset](https://datasets.imdbws.com/). Raw `.tsv.gz` dumps are streamed through a `SKIP LOCKED` message queue into the database, then eight analytical queries are benchmarked and indexed with real `EXPLAIN (ANALYZE, BUFFERS)` measurements.
 
 ## Highlights
 
-- A message queue implemented on a plain table -- `enqueue` / `dequeue` / `ack` / `nack` / `reap_expired` in PL/pgSQL, using `FOR UPDATE SKIP LOCKED` for lock-free concurrent consumers and giving at-least-once delivery.
-- A streaming ingestion pipeline that never extracts the compressed dumps to disk, batches rows to push `JSONB` payloads past PostgreSQL's `TOAST` compression threshold on purpose, and measured a **5.72x** real compression ratio from doing so.
-- Six indexes, each tied to a specific query, with real before/after timing and `EXPLAIN` evidence -- including one case where an index made a query *slower*, reported and explained rather than hidden.
-- A full write-up (`report/report.pdf`, LaTeX/XeLaTeX) covering PostgreSQL configuration tuning, index internals, `JSONB`/`TOAST`, and message-queue theory.
+- A message queue on a plain table: `enqueue`, `dequeue`, `ack`, `nack`, `reap_expired` in PL/pgSQL, using `FOR UPDATE SKIP LOCKED` so several consumers can work at the same time without blocking each other.
+- A streaming producer/consumer pipeline. Rows are batched so the `JSONB` payloads cross PostgreSQL's `TOAST` compression threshold on purpose. Measured compression ratio: 5.72x.
+- Six indexes, each built for one specific query, with real before/after timing and `EXPLAIN` evidence. One index actually made a query slower, and that's in the report too, not left out.
+- A full write-up (`report/report.pdf`) on PostgreSQL configuration, index types, `JSONB`/`TOAST`, and message-queue theory.
 
 ## Pipeline
 
@@ -20,9 +20,9 @@ flowchart LR
     D -.->|"ack / nack"| C
 ```
 
-## Results, honestly
+## Results
 
-Measured on a disk-constrained machine, so `title_principals` (the largest table, ~90M rows) was loaded at ~9% of its full size; every other table is complete. Of the eight scenarios, six got measurably faster after indexing, one stayed effectively the same by design, and one got slower -- a real regression caused by a non-selective filter picking a `Bitmap Heap Scan` over a cheaper sequential scan. Full numbers, query plans, and the reasoning are in the report.
+Loaded on a machine with limited disk space, so `title_principals` (the biggest table, ~90M rows) only has about 9% of its rows. Every other table is complete. Six of the eight scenarios got faster after indexing, one stayed about the same by design, and one got slower because the filter wasn't selective enough for the index to pay off. Full numbers and query plans are in the report.
 
 ![Execution time change after indexing, per scenario](report/figures/performance_comparison.png)
 
